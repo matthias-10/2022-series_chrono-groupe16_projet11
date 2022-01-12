@@ -1,0 +1,65 @@
+---
+title: "Series chronologiques Projet 2022"
+subtitle: Groupe 16, Sujet 11
+author: "Matthias Lang, Valentin De Crespin De Billy"
+date: "January 12, 2022"
+output: #pdf_document
+    html_document:
+    df_print: paged
+
+header-includes: \usepackage{rotating, graphicx, booktabs} \usepackage{placeins} \usepackage{chngcntr}
+---
+```{r eval=FALSE, include=FALSE}
+#install.packages("sjPlot")
+#install.packages("visreg")
+
+library(visreg)
+# https://cran.r-project.org/web//packages/visreg/visreg.pdf
+library(sjPlot)
+# https://strengejacke.github.io/sjPlot/articles/tab_model_estimates.html
+library(directlabels)
+# https://tdhock.github.io/directlabels/
+
+library(knitr)
+library(tidyverse)
+library(stargazer)
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(stargazer)
+library(dplyr)
+library(tseries)
+library(forecast)
+setwd("/home/matthias/Documents/Wien/Statistik/Erasmus/cours/serieschrono/projet/")
+```
+
+
+
+```{r import, results="asis"}
+donnees <- read.csv("donnees.csv", stringsAsFactors=FALSE)
+donnees$date = as.Date(donnees$date, "%d/%m/%Y")
+miles = ts(donnees$miles, start=as.double(format.Date(donnees$date[1], "%Y")), frequency=12)
+```
+
+
+```{r representation graphique de la serie temporelle}
+plot(donnees, type="l", main = "U.K. airlines: aircraft miles flown, by monts (thousands)")
+```
+```{r}
+tsdisplay(miles)
+```
+```{r}
+m = decompose(miles)
+plot(m)
+```
+
+```{r}
+mdiff = diff(miles,12)
+tsdisplay(mdiff)
+tsdisplay(mdiff,ci.type="ma")
+```
+
+
