@@ -24,6 +24,7 @@ library(knitr)
 library(tidyverse)
 library(stargazer)
 
+## https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b
 ```
 
 
@@ -33,6 +34,8 @@ library(stargazer)
 library(dplyr)
 library(tseries)
 library(forecast)
+library(lmtest)
+
 setwd("/home/matthias/Documents/Wien/Statistik/Erasmus/cours/serieschrono/projet/")
 ```
 
@@ -47,19 +50,68 @@ miles = ts(donnees$miles, start=as.double(format.Date(donnees$date[1], "%Y")), f
 
 ```{r representation graphique de la serie temporelle}
 plot(donnees, type="l", main = "U.K. airlines: aircraft miles flown, by monts (thousands)")
+#plot(donnees$date, log(donnees$miles), type = "l")
 ```
+
+Ici on pourrait effectuer un Durbin-Watson-Test ou qqch. pour montrer pourquoi on ne peut pas utiliser une régression linéaire (OLS) normale.
+De même façon "Homoscedasticity".
+
 ```{r}
-tsdisplay(miles)
+tsdisplay(miles, ci.type = "ma", main = "X_t = miles") # faut-il "ma" ici? C'est pas dans le diaporama
 ```
 ```{r}
 m = decompose(miles)
 plot(m)
 ```
 
-```{r}
+```{r delta}
 mdiff = diff(miles,12)
-tsdisplay(mdiff)
-tsdisplay(mdiff,ci.type="ma")
+#tsdisplay(mdiff)
+tsdisplay(mdiff,ci.type="ma", main = "(1-B^12)X_t")
+# = pacf(mdiff, ci.type="ma")
+# =  acf(mdiff, ci.type="ma")
 ```
 
+Qu'est-ce qu'il faut faire pour que la série soit stationnaire ?
+
+```{r delta^2}
+mdiff12diff1 = diff(mdiff, lag=1, difference = 1)
+tsdisplay(mdiff12diff1, ci.type = "ma", main = "(1-B)(1-B^12)X_t")
+```
+
+We can use the Augmented Dickey-Fuller (ADF) t-statistic test to do this. ADF test is a test to check whether the series has a unit root or not. If it exists, the series has a linear trend. However, if it’s not, we can say that the model is stationary.
+
+```{r test pour station.}
+adf.test(mdiff12diff1)
+```
+
+
+```{r fitting a model}
+model1 <- arima(miles, order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
+
+summary(model1)
+```
+
+
+```{r forecast}
+fvalues <- forecast(model1, 12)
+# = fvalues2 <- predict(model1, 12)
+print(fvalues)
+plot(fvalues, col.main = "red")
+```
+
+```{r model diagnostics}
+tsdiag(model1)
+
+# il manque un t-test ? Donc:
+coeftest(model1) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+
+# portmanteau tests
+Box.test(mdiff12diff1)
+Box.test(residuals(model1), type = "Ljung-Box")
+
+
+acf(residuals(model1), ci.type="ma")
+pacf(residuals(model1), ci.type="ma" ,main="corrélogramme partiel de residuals(model1)")
+```
 
