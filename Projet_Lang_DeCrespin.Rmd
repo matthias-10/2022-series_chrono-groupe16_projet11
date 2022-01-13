@@ -53,6 +53,15 @@ plot(donnees, type="l", main = "U.K. airlines: aircraft miles flown, by monts (t
 #plot(donnees$date, log(donnees$miles), type = "l")
 ```
 
+```{r}
+dw = dwtest(miles ~ date, data = donnees)
+```
+On a fait un Durbin-Watson Test: $H_0$, que l'autocorrelation des erreurs estimées d'un modèle linéare `miles ~ date` est égal à 0, est rejetée avec une valeur p de `r dw$p.value`. 
+Clairement on rejète $H_0$.
+Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exemple l'égalité des variances et l'indépance des valeurs et des erreurs.
+
+
+
 Ici on pourrait effectuer un Durbin-Watson-Test ou qqch. pour montrer pourquoi on ne peut pas utiliser une régression linéaire (OLS) normale.
 De même façon "Homoscedasticity".
 
@@ -65,18 +74,29 @@ plot(m)
 ```
 
 ```{r delta}
-mdiff = diff(miles,12)
+mdiff12 = diff(miles,12)
 #tsdisplay(mdiff)
-tsdisplay(mdiff,ci.type="ma", main = "(1-B^12)X_t")
+# tsdisplay(mdiff12,ci.type="ma", main = "(1-B^12)X_t")
 # = pacf(mdiff, ci.type="ma")
 # =  acf(mdiff, ci.type="ma")
+adf.test(mdiff12)
+
+plot(mdiff12)
+fit.12 <- lm(mdiff12 ~ tail(donnees$date,84))
+abline(fit.12, col="red")
+summary(fit.12)
 ```
 
 Qu'est-ce qu'il faut faire pour que la série soit stationnaire ?
 
 ```{r delta^2}
-mdiff12diff1 = diff(mdiff, lag=1, difference = 1)
+mdiff12diff1 = diff(mdiff12, lag=1, difference = 1)
 tsdisplay(mdiff12diff1, ci.type = "ma", main = "(1-B)(1-B^12)X_t")
+
+plot(mdiff12diff1)
+fit.12.1 <- lm(mdiff12diff1 ~ tail(donnees$date,83))
+abline(fit.12.1, col="red")
+summary(fit.12.1)
 ```
 
 We can use the Augmented Dickey-Fuller (ADF) t-statistic test to do this. ADF test is a test to check whether the series has a unit root or not. If it exists, the series has a linear trend. However, if it’s not, we can say that the model is stationary.
@@ -85,6 +105,7 @@ We can use the Augmented Dickey-Fuller (ADF) t-statistic test to do this. ADF te
 adf.test(mdiff12diff1)
 ```
 
+Après differencier il faut tester s'il reste qu'un bruit blanc.
 
 ```{r fitting a model}
 model1 <- arima(miles, order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
