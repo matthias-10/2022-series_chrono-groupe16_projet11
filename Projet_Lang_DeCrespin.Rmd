@@ -1,5 +1,5 @@
 ---
-title: "Series chronologiques Projet 2022"
+title: "Séries chronologiques Projet 2022"
 subtitle: Groupe 16, Sujet 11
 author: "Matthias Lang, Valentin De Crespin De Billy"
 date: "January 30, 2022"
@@ -40,7 +40,8 @@ library(tseries)
 library(forecast)
 library(lmtest)
 
-setwd("/home/matthias/Documents/Wien/Statistik/Erasmus/cours/serieschrono/projet/")
+wd <- "/home/matthias/Documents/Wien/Statistik/Erasmus/cours/serieschrono/projet/"
+setwd(wd)
 ```
 
 # Les bases
@@ -54,7 +55,9 @@ Premièrement, une analyse rudimentaire des données et de leurs propriétés.
 ```{r import, results="asis"}
 donnees <- read.csv("donnees.csv", stringsAsFactors=FALSE)
 donnees$date = as.Date(donnees$date, "%d/%m/%Y")
-miles = ts(donnees$miles, start=as.double(format.Date(donnees$date[1], "%Y")), frequency=12)
+miles = ts(donnees$miles, 
+           start=as.double(format.Date(donnees$date[1], "%Y")), 
+           frequency=12)
 ```
 
 Les données sont affichées ci-dessous. C'est bien évident qu'il ne s'agit pas d'une séries stationnaire, car il y a une tendance.
@@ -103,15 +106,18 @@ plot(fit.add$residuals, type = "l")
 Soit en différencier:
 $$Z_t = log(X_t) - log(X_{t-1}) = (1-B)\log(X_t)$$
 ```{r delta}
-mdiff1 = diff(log(miles),lag = 1, difference = 1) #12
+mdiff1 = diff(log(miles), lag = 1, difference = 1) #12
 
 x = tail(donnees$date, length(mdiff1))
 fit.1 = lm(mdiff1 ~ x)
 plot(x, mdiff1, type = "l")
 abline(fit.1, col = "red")
 plot(fit.1$residuals, type = "l")
-
 ```
+```{r}
+summary(fit.1)
+```
+Il ne reste pas une tendence. La séries est-elle stationnaire ?
 
 Laquelle mèthode choisir ? Généralment différencier est mieux.
 
@@ -183,21 +189,32 @@ adf.test(fit.add$residuals, k=4)
 adf.test(fit.add$residuals, k=5)
 ```
 
+### Saisonnalité
 
-### Delta12
+```{r}
+acf(mdiff1, lag.max = 50, ci.type = "ma")
+# acf(log(miles), lag.max = 80)
+```
 
-Qu'est-ce qu'il faut faire pour que la série soit stationnaire ?
+Ici on peut éxpliquer qu'est-ce que c'est, l'ACF.
+Ils sortent beaucoup de bâtons, significatif à 3, 4, 5, 7, 12 et 24 mois.
+D'ailleurs il y une décroissement lente, cela peut indiquer qu'on faut encore differencier.
+
+On introduit une componente saisonnal dans le modèl proposé.
+
+$$(1-B)(1-B^{12}) \log(X_t) = \varepsilon_t $$
 
 ```{r delta^2}
-mdiff12diff1 = diff(mdiff1, lag=12)
+mdiff12diff1 = diff(mdiff1, lag=12, differences=1)
 tsdisplay(mdiff12diff1, ci.type = "ma", main = "(1-B)(1-B^12)X_t")
 
 plot(mdiff12diff1)
 fit.12.1 <- lm(mdiff12diff1 ~ tail(donnees$date,83))
 abline(fit.12.1, col="red")
-summary(fit.12.1)
-
+# summary(fit.12.1)
 ```
+Dans l'ACF il y a encore quelques bâtons qui sortent: à 1, 2 et 12 mois.
+Mais il n'y a aucune repère qu'il faut un modèl multiplicatif (des bâtons qui sortent encadré par des bâtons de signe inversée).
 
 We can use the Augmented Dickey-Fuller (ADF) t-statistic test to do this. ADF test is a test to check whether the series has a unit root or not. If it exists, the series has a linear trend. However, if it’s not, we can say that the model is stationary.
 
@@ -216,31 +233,6 @@ model1 <- arima(miles, order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod
 summary(model1)
 ```
 ### densité spectrale
-
-
-
-
-# Abbildung 4
-dx <- x[2:n]-x[1:(n-1)]; dy <- y[2:n]-y[1:(n-1)]
-par(mfcol=c(3,2),mar=c(2,2,0.5,2),pch=20); h <- 2*pi
-plot(T[2:n],dx,type="l"); mtext(" (a)",4,las=1)
-H <- spec.pgram(dx,taper=0,detrend=FALSE,fast=FALSE,plot=FALSE)
-plot(h*H$freq,H$spec/h,type="l"); mtext(" (c)",4,las=1)
-HH <- spec.pgram(dx,taper=0,detrend=FALSE,fast=FALSE,plot=FALSE,spans=15)
-lines(h*HH$freq,HH$spec/h,col="blue",lwd=2)
-plot(h*H$freq,H$spec/h,type="l"); mtext(" (e)",4,las=1)
-HH <- spec.pgram(dx,taper=0,detrend=FALSE,fast=FALSE,plot=FALSE,spans=25)
-lines(h*HH$freq,HH$spec/h,col="blue",lwd=2)
-plot(T[2:n],dy,type="l"); mtext(" (b)",4,las=1)
-H <- spec.pgram(dy,taper=0,detrend=FALSE,fast=FALSE,plot=FALSE)
-plot(h*H$freq,H$spec/h,type="l"); mtext(" (d)",4,las=1)
-HH <- spec.pgram(dy,taper=0,detrend=FALSE,fast=FALSE,plot=FALSE,spans=15)
-lines(h*HH$freq,HH$spec/h,col="red",lwd=2)
-plot(h*H$freq,H$spec/h,type="l"); mtext(" (f)",4,las=1)
-HH <- spec.pgram(dy,taper=0,detrend=FALSE,fast=FALSE,plot=FALSE,spans=25)
-lines(h*HH$freq,HH$spec/h,col="red",lwd=2)
-```
-
 
 ```{r forecast}
 fvalues <- forecast(model1, 12)
@@ -262,5 +254,20 @@ Box.test(residuals(model1), type = "Ljung-Box")
 
 acf(residuals(model1), ci.type="ma")
 pacf(residuals(model1), ci.type="ma" ,main="corrélogramme partiel de residuals(model1)")
+```
+
+### Base de test
+
+Pour comparer les modèles qu'on a choisi pour faire la prévision, on sépare la dernière année, 1970, calcule les estimateurs pour les modèles et fait des prévision.
+La meilleure prévision détermine la modèle laquelle on va choisir finalement.
+Pour comparer la qualité des prévision on peut utiliser le MSE (mean squared error) et leurs AIC.
+
+```{r}
+# L'année 1970
+test =  tail(miles, 12)
+# Les années 1963-1969
+train = head(miles, length(miles)-12)
+
+# Puis MSE?
 ```
 
