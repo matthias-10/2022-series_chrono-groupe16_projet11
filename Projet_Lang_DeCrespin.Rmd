@@ -9,38 +9,6 @@ output:
 subtitle: Groupe 16, Sujet 11
 ---
 
-```{r eval=FALSE, include=FALSE}
-#install.packages("sjPlot")
-#install.packages("visreg")
-
-library(visreg)
-# https://cran.r-project.org/web//packages/visreg/visreg.pdf
-library(sjPlot)
-# https://strengejacke.github.io/sjPlot/articles/tab_model_estimates.html
-library(directlabels)
-# https://tdhock.github.io/directlabels/
-
-library(knitr)
-library(tidyverse)
-library(stargazer)
-
-## https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b
-
-
-legend("topright",
-       legend=c("Série observée",
-                "Nouvelle tendance"), 
-       col = c("olivedrab",
-               "red"),
-       lty = 1,
-       lwd = 2,
-       cex = 0.7,
-       text.col = "slategray4",
-       title = "Années",
-       border = "white")
-```
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(latex2exp) # pour "TeX("$\\alpha$")
@@ -123,9 +91,22 @@ plot(donnees$date, log(miles),
      xlab = "date",
      type = "l")
 abline(fit.add, col = "red")
-legend(legend="regression",
-       x=-2,y=8.85,xjust=1,bty="n",
-       fill = "red")
+
+legend("bottomright",
+       legend=c("Série observée",
+                "Régression"), 
+       col = c("black",
+               "red"),
+       lty = 1,
+       lwd = 2,
+       cex = 0.7,
+       text.col = "slategray4",
+       #title = "Années",
+       border = "white")
+
+# legend(legend="regression",
+#        x=-2,y=8.85,xjust=1,bty="n",
+#        fill = "red")
 
 plot(fit.add$residuals,
      xlab = "date",
@@ -155,6 +136,9 @@ Il ne reste pas une tendence. Ci-dessous on voit que il n'y a ni une tendance ni
 summary(fit.mult)$coefficients
 ```
 Laquelle mèthode choisir ? Généralment différencier est mieux.
+
+Est-ce qu'il vaut différencie encore une fois ? On va comparer la variance de la série une fois différenciée, $\widehat{Var}((1-B)\log X_t = `r round(var(mdiff1), 3)`$ avec la série deux fois différencie, $\widehat{Var}((1-B)^2\log X_t = `r round(var(diff(mdiff1, lag = 1, difference = 1)), 3)`$ ($\widehat{Var}(\log X_t = `r round(var(log(miles)), 3)`$).
+Car on a déjà trouvé que la tendance a disparu, et on voit en plus que différencier en supplémentaire fait augmenter la variance, il ne vaut pas encore différencier.
 
 La séries est-elle stationnaire ? Non, il y a encore la saisonalité.
 ```{r eval=FALSE, include=FALSE}
@@ -187,9 +171,9 @@ points(tail(donnees$date, length(mdiff12diff1)),
 abline(h=0, col = "grey")
 ```
 
-
 Pour tester si la série est stationnaire nous utilisons l'Augmented Dickey-Fuller t-statistic test. 
 ADF test is a test to check whether the series has a unit root or not. If it exists, the series has a linear trend. However, if it’s not, we can say that the model is stationary.
+
 ```{r}
 adf.test(mdiff12diff1)
 ```
@@ -228,17 +212,39 @@ adf.test(fit.add$residuals, k=4)
 ### Modèliser
 
 #### Modèle 1
-Après la dernière différenciation on a vu que les données pourraient être modélisées par un MA(1) avec saisonalité.
+Après la dernière différenciation on a vu que les données pourraient être modélisées par un MA(2) avec saisonalité.
 Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
 
-$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B)(1-\theta_{12}B^{12})\epsilon_t$$
-Autrement dit, une $\text{SARIMA}_{12}[(p= 0,d= 1,q= 1),(P= 0,D= 1,Q= 1)]$
+$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_2B^2)(1-\theta_{12}B^{12})\epsilon_t$$
+Autrement dit, une $\text{SARIMA}_{12}[(p= 0,d= 1,q= 2),(P= 0,D= 1,Q= 1)]$
 
 ```{r fitting a model}
-sarima_12.001.011 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
+sarima_12.012.011 <- arima(log(miles), order = c(0,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
 
-summary(sarima_12.001.011)
+summary(sarima_12.012.011)
+coeftest(sarima_12.012.011) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
 ```
+
+
+```{r echo=FALSE}
+par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
+acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
+pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+```
+
+Il y a encore quelques bâtons qui sortens, notamment $r(3), r(12)$ et $r(19)$.
+Alors on va ensuite, comme modèle 3, considerer un modèle avec une partie autoreggresive.
+
+
+```{r model diagnostics}
+# tsdiag(sarima_12.012.011)
+
+# portmanteau tests
+# Box.test(mdiff12diff1)
+box = Box.test(residuals(sarima_12.012.011), type = "Ljung-Box")$p.value
+```
+
+$`r box`$
 
 Après differencier et modèliser il faut tester s'il reste qu'un bruit blanc.
 On peut utiliser un Box-Test.
@@ -273,6 +279,7 @@ for (c in (-15):(15)) abline(a=c,b=-1,col="gray")
 
 #periodogramm(mdiff12diff1)
 periodogramm(fit.add$residuals)
+periodogramm(sarima_12.012.011$residuals)
 periodogramm(miles)
 ```
 
@@ -288,26 +295,23 @@ En outre, le log-périodogrammes des résidus tombe moins vite pour les résidus
 
 Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c\omega^{-1}$ , dann ist sie nicht integrierbar, was unvereinbar ist mit Stationarität, weil die Varianz eines stationären Prozesses gegeben ist durch das Integral der Spektraldichte. In der Praxis ist $f$ unbekannt und muss durch einen Proxy ersetzt werden, z.B. durch das Periodogramm $I$. Für eine graphische Einschätzung der Stationarität kann man $I(\omega)$ gegen $\omega$ plotten und mit $h(\omega ) = c\omega^{-1}$ vergleichen. Einfacher ist es aber, wenn man $\log(I(\omega))$ gegen $\log(\omega)$ plottet und mit Geraden der Steigung -1 vergleicht (siehe Abbildung 3).
 
-```{r model diagnostics}
-tsdiag(model1)
 
-# il manque un t-test ? Donc:
-coeftest(model1) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
-
-# portmanteau tests
-Box.test(mdiff12diff1)
-Box.test(residuals(model1), type = "Ljung-Box")
-
-
-acf(residuals(model1), ci.type="ma")
-pacf(residuals(model1), ci.type="ma" ,main="corrélogramme partiel de residuals(model1)")
-```
 
 #### Modèle 2
 
-*Ici on peut également essayer de faire un modèle additif $(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$,  $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$*
+Ici on peut également essayer de faire un modèle additif 
+$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
+autrement dit $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$.
 
+#### Modèle 3
 
+Pour le modèle 1 on a eu un graphique pour les autocorrélations suivants.
+
+```{r}
+pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+```
+
+$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
 
 ## Choix du modèle
 
@@ -388,8 +392,8 @@ mse = 443203
 ```
 
 
-| Model                                   | AIC                           | MSE         |
-|-----------------------------------------|-------------------------------|-------------|
+| Model                                     | AIC                           | MSE         |
+|-------------------------------------------|-------------------------------|-------------|
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
@@ -404,7 +408,7 @@ fvalues <- forecast(model1, 12)
 # = fvalues2 <- predict(model1, 12)
 print(fvalues)
 plot(fvalues, col.main = "red")
-plot(forecast(sarima_12.001.011,12))
+plot(forecast(sarima_12.012.011,12))
 ```
 
 > Tu déconnes avec tes tonnes de projets
