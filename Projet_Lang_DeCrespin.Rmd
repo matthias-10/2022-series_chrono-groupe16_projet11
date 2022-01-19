@@ -1,13 +1,12 @@
 ---
 title: "Séries chronologiques Projet 2022"
-subtitle: Groupe 16, Sujet 11
 author: "Matthias Lang, Valentin De Crespin De Billy"
 date: "Janvier 30, 2022"
-output: #pdf_document
-    html_document:
-    df_print: paged
-
-#header-includes: \usepackage{rotating, graphicx, booktabs} \usepackage{placeins} \usepackage{chngcntr}
+output:
+  html_document: null
+  pdf_document: default
+  df_print: paged
+subtitle: Groupe 16, Sujet 11
 ---
 
 ```{r eval=FALSE, include=FALSE}
@@ -26,6 +25,19 @@ library(tidyverse)
 library(stargazer)
 
 ## https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b
+
+
+legend("topright",
+       legend=c("Série observée",
+                "Nouvelle tendance"), 
+       col = c("olivedrab",
+               "red"),
+       lty = 1,
+       lwd = 2,
+       cex = 0.7,
+       text.col = "slategray4",
+       title = "Années",
+       border = "white")
 ```
 
 
@@ -126,7 +138,7 @@ $$log(X_t) - log(X_{t-1}) = (1-B)\log(X_t)$$
 mdiff1 = diff(log(miles), lag = 1, difference = 1) #12
 # difference to the first order
 
-fit.mult = lm(mdiff1 ~ x)
+fit.mult = lm(mdiff1 ~ tail( donnees$date, length(mdiff1) ))
 
 par(mfrow=c(1,2))
 plot(tail(donnees$date, length(mdiff1)), 
@@ -215,14 +227,15 @@ adf.test(fit.add$residuals, k=4)
 
 ### Modèliser
 
+#### Modèle 1
 Après la dernière différenciation on a vu que les données pourraient être modélisées par un MA(1) avec saisonalité.
-Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.:
+Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
 
 $$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B)(1-\theta_{12}B^{12})\epsilon_t$$
-Autrement dit, une $\text{SARIMA}_12[(p= 0,d= 0,q= 1),(P= 0,D= 1,Q= 1)]$
+Autrement dit, une $\text{SARIMA}_{12}[(p= 0,d= 1,q= 1),(P= 0,D= 1,Q= 1)]$
 
 ```{r fitting a model}
-sarima_12.001.011 <- arima(log(miles), order = c(0,0,1), seasonal=list(order = c(0,1,1), perdiod=12))
+sarima_12.001.011 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
 
 summary(sarima_12.001.011)
 ```
@@ -275,15 +288,6 @@ En outre, le log-périodogrammes des résidus tombe moins vite pour les résidus
 
 Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c\omega^{-1}$ , dann ist sie nicht integrierbar, was unvereinbar ist mit Stationarität, weil die Varianz eines stationären Prozesses gegeben ist durch das Integral der Spektraldichte. In der Praxis ist $f$ unbekannt und muss durch einen Proxy ersetzt werden, z.B. durch das Periodogramm $I$. Für eine graphische Einschätzung der Stationarität kann man $I(\omega)$ gegen $\omega$ plotten und mit $h(\omega ) = c\omega^{-1}$ vergleichen. Einfacher ist es aber, wenn man $\log(I(\omega))$ gegen $\log(\omega)$ plottet und mit Geraden der Steigung -1 vergleicht (siehe Abbildung 3).
 
-```{r forecast}
-model1 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
-fvalues <- forecast(model1, 12)
-# = fvalues2 <- predict(model1, 12)
-print(fvalues)
-plot(fvalues, col.main = "red")
-plot(forecast(sarima_12.001.011,12))
-```
-
 ```{r model diagnostics}
 tsdiag(model1)
 
@@ -299,6 +303,12 @@ acf(residuals(model1), ci.type="ma")
 pacf(residuals(model1), ci.type="ma" ,main="corrélogramme partiel de residuals(model1)")
 ```
 
+#### Modèle 2
+
+*Ici on peut également essayer de faire un modèle additif $(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$,  $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$*
+
+
+
 ## Choix du modèle
 
 ### Base de test
@@ -307,6 +317,8 @@ Pour comparer les modèles qu'on a choisi pour faire la prévision, on sépare l
 La meilleure prévision détermine la modèle quelle on va choisir finalement.
 Pour comparer la qualité des prévision on peut utiliser le MSE (mean squared error) et leurs AIC :
 $\text{MSE} = \frac{1}{12}\sum_{t=Jan 1970}^{Dec 1970}(\hat{X_t} - X_t)^2$.
+
+### Calcul des modèles avec la base de test
 
 ```{r}
 # L'année 1970
@@ -364,3 +376,41 @@ lines(mydata.pred$se - 2* mydata.pred$se)
 
 ```
 
+### Comparaison et choix du modèle
+
+Ci-dessous tous les modèles qu'on a trouvé sont comparés dans un tableau.
+Le plus petits le MSE, le meilleur.
+De la même manière avec les AICs, qui indiquent aussi si un modèle est parcimonieux. Ce critère repose donc sur un compromis entre la qualité de l'ajustement et la complexité du modèle, en pénalisant les modèles ayant un grand nombre de paramètres.
+
+```{r placeholder}
+sarima_12.001.011_AIC = 308
+mse = 443203
+```
+
+
+| Model                                   | AIC                           | MSE         |
+|-----------------------------------------|-------------------------------|-------------|
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+
+
+## Prévision pour l'année 1971
+
+```{r forecast}
+model1 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
+fvalues <- forecast(model1, 12)
+# = fvalues2 <- predict(model1, 12)
+print(fvalues)
+plot(fvalues, col.main = "red")
+plot(forecast(sarima_12.001.011,12))
+```
+
+> Tu déconnes avec tes tonnes de projets
+
+> Ils vont encore s’entasser avec ceux de l’année prochaine
+
+> Viens, j’ai fait le plein de patience
+
+> Y a assez d’essence pour rouler jusqu’à l’horizon
