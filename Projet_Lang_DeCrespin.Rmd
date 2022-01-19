@@ -216,15 +216,15 @@ adf.test(fit.add$residuals, k=4)
 ### Modèliser
 
 Après la dernière différenciation on a vu que les données pourraient être modélisées par un MA(1) avec saisonalité.
-Alors on aurait la modèle suivante, avec $\epsilon_t$ supposé b.b.:
+Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.:
 
 $$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B)(1-\theta_{12}B^{12})\epsilon_t$$
 Autrement dit, une $\text{SARIMA}_12[(p= 0,d= 0,q= 1),(P= 0,D= 1,Q= 1)]$
 
 ```{r fitting a model}
-model1 <- arima(miles, order = c(0,0,1), seasonal=list(order = c(0,1,1), perdiod=12))
+sarima_12.001.011 <- arima(log(miles), order = c(0,0,1), seasonal=list(order = c(0,1,1), perdiod=12))
 
-summary(model1)
+summary(sarima_12.001.011)
 ```
 
 Après differencier et modèliser il faut tester s'il reste qu'un bruit blanc.
@@ -276,10 +276,12 @@ En outre, le log-périodogrammes des résidus tombe moins vite pour les résidus
 Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c\omega^{-1}$ , dann ist sie nicht integrierbar, was unvereinbar ist mit Stationarität, weil die Varianz eines stationären Prozesses gegeben ist durch das Integral der Spektraldichte. In der Praxis ist $f$ unbekannt und muss durch einen Proxy ersetzt werden, z.B. durch das Periodogramm $I$. Für eine graphische Einschätzung der Stationarität kann man $I(\omega)$ gegen $\omega$ plotten und mit $h(\omega ) = c\omega^{-1}$ vergleichen. Einfacher ist es aber, wenn man $\log(I(\omega))$ gegen $\log(\omega)$ plottet und mit Geraden der Steigung -1 vergleicht (siehe Abbildung 3).
 
 ```{r forecast}
+model1 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
 fvalues <- forecast(model1, 12)
 # = fvalues2 <- predict(model1, 12)
 print(fvalues)
 plot(fvalues, col.main = "red")
+plot(forecast(sarima_12.001.011,12))
 ```
 
 ```{r model diagnostics}
@@ -297,19 +299,35 @@ acf(residuals(model1), ci.type="ma")
 pacf(residuals(model1), ci.type="ma" ,main="corrélogramme partiel de residuals(model1)")
 ```
 
+## Choix du modèle
+
 ### Base de test
 
-Pour comparer les modèles qu'on a choisi pour faire la prévision, on sépare la dernière année, 1970, calcule les estimateurs pour les modèles et fait des prévision.
-La meilleure prévision détermine la modèle laquelle on va choisir finalement.
-Pour comparer la qualité des prévision on peut utiliser le MSE (mean squared error) et leurs AIC.
+Pour comparer les modèles qu'on a choisi pour faire la prévision, on sépare la dernière année, 1970. Puis on calcule les estimateurs pour les modèles avec tous les années antérieures et fait des prévisions pour l'année 1970.
+La meilleure prévision détermine la modèle quelle on va choisir finalement.
+Pour comparer la qualité des prévision on peut utiliser le MSE (mean squared error) et leurs AIC :
+$\text{MSE} = \frac{1}{12}\sum_{t=Jan 1970}^{Dec 1970}(\hat{X_t} - X_t)^2$.
 
 ```{r}
 # L'année 1970
-test =  tail(miles, 12)
+miles.test =  tail(miles, 12)
 # Les années 1963-1969
-train = head(miles, length(miles)-12)
+miles.train = head(miles, length(miles)-12)
 
 # Puis MSE?
+```
+```{r model avec miles.train}
+model <- arima(log(miles.train), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
+miles.prev <- exp(forecast(model, 12)$mean)
+model.mse = sum((miles.test - miles.prev)^2) / 12
+model$aic
+
+plot(miles.prev, col="blue",
+     main = paste("AIC: ", model$aic),
+     ylab = "miles")
+lines(miles.test)
+grid()
+
 ```
 
 ```{r}
