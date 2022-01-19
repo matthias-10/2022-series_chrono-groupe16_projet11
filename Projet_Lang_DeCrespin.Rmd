@@ -75,6 +75,9 @@ Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exem
 ### La tendance
 
 En gros, on a deux possibilités pour supprimer la tendance.
+
+##### traiter de la tendance en mode additive
+
 Soit avec un modèl additif:
 
 ```{r eval=FALSE, include=FALSE}
@@ -112,6 +115,15 @@ plot(fit.add$residuals,
      xlab = "date",
      type = "l")
 ```
+
+Ici un problème se présente:
+```{r echo=FALSE}
+par(mar = c(3,4,4,2))
+acf(fit.add$residuals)
+```
+L'autocorrélation ne decroit pas.
+
+##### traiter de la tendance en différenciant
 
 Soit en différencier:
 $$log(X_t) - log(X_{t-1}) = (1-B)\log(X_t)$$
@@ -179,13 +191,14 @@ adf.test(mdiff12diff1)
 ```
 Peut-on déjà poser que $(1-B)(1-B^{12}) \log(X_t) = \varepsilon_t$, avec $\varepsilon_t$ un bruit blanc ?
 
-```{r}
+```{r echo=FALSE}
 par(mfrow=c(1,2), mar=c(3,4,1,1))
 acf(mdiff12diff1, lag.max = 30, ci.type = "ma")
 pacf(mdiff12diff1, lag.max = 30)
 ```
 
 *Ici on peut éxpliquer qu'est-ce que c'est, l'ACF.*
+En ce qui concerne l'ACF:
 Ils sortent des bâtons significatives à 1, 2 et 12 mois, sans qu'on puisse détérminer une règle.
 D'ailleurs il y n'a pas une décroissement lente, qui pourrait indiquer qu'on faut encore differencier.
 Mais il n'y a aucune repère qu'il faut un modèl multiplicatif (des bâtons qui sortent encadré par des bâtons de signe inversée). 
@@ -228,11 +241,25 @@ coeftest(sarima_12.012.011) #https://stackoverflow.com/questions/43826952/how-ca
 
 ```{r echo=FALSE}
 par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
-acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
+acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
 pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+
+rho1 = round(acf1[1/12]$acf[1], 2)
+rho2 = round(acf1[2/12]$acf[1], 2) # rho1 ^2 (??)
+rho3 = round(acf1[3/12]$acf[1], 2) # # rho1^3 (??)
 ```
 
 Il y a encore quelques bâtons qui sortens, notamment $r(3), r(12)$ et $r(19)$.
+Dans le graphique "ACF", est-ce que $\rho(3)$ sort de l'intervalle de confiance ? Cela peut indiquer qu'il a encore une componente MA dans les erreurs. Pour répondre à cette question, on va faire le calcul.
+
+Intervalle de Bartlett q=3 : 
+      $$\pm \frac{1.96}{\sqrt{N}} (1 + 2\hat{\rho}^2(1) + 2\hat{\rho}^2(2) + 2\hat{\rho}^2(3))^{0.5} = 
+        \pm \frac{1.96}{\sqrt{96}}(1 + 2*`r rho1^2`     +  2*`r rho2^2`    + 2*`r rho3^2`)^{0.5} = 
+        \pm `r round(1.96/sqrt(96)*(1+ 2*rho1^2         + 2*rho2^2         + 2*rho3^2)^0.5, 3)` 
+        > 
+        \rho(3) = `r rho3`$$ 
+        **faut il remplacer N par N-1-12 parce qu'on a différencié ?**
+
 Alors on va ensuite, comme modèle 3, considerer un modèle avec une partie autoreggresive.
 
 
@@ -241,10 +268,11 @@ Alors on va ensuite, comme modèle 3, considerer un modèle avec une partie auto
 
 # portmanteau tests
 # Box.test(mdiff12diff1)
+acf(residuals(sarima_12.012.011)) # pour montrer b.b. E(e_t*e_s) = 0
 box = Box.test(residuals(sarima_12.012.011), type = "Ljung-Box")$p.value
 ```
 
-$`r box`$
+P-value de Ljung-Box-Test des résidues : $`r box`$.
 
 Après differencier et modèliser il faut tester s'il reste qu'un bruit blanc.
 On peut utiliser un Box-Test.
