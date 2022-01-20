@@ -51,6 +51,7 @@ En fait on voit que les données sont stationnaires? Comment est-ce possible :
 ```{r}
 adf.test(donnees$miles, alternative = "stationary")
 ```
+#### Transformation
 
 Mais il semble aussi qu'il ait une croissance exponentielle. Cela ne surprend pas avec une scale non-négative.
 Pour comparison: La variance de la première moitié est $`r round(var(head(miles,length(miles)/2)), -5)`$, la seconde moitié $`r round(var(tail(miles,length(miles)/2)), -5)`$.
@@ -74,7 +75,7 @@ Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exem
 
 ### La tendance
 
-En gros, on a deux possibilités pour supprimer la tendance.
+En gros, on a deux possibilités pour supprimer la tendance et faire en sorte que $\mathbb{E}[X_t] = 0$, soustraire une tendance ou différencier d'un ordre quelquonque.
 
 ##### traiter de la tendance en mode additive
 
@@ -189,6 +190,10 @@ ADF test is a test to check whether the series has a unit root or not. If it exi
 ```{r}
 adf.test(mdiff12diff1)
 ```
+
+Est-ce qu'il vaut différencie encore une fois ? On va comparer la variance de la série une fois différenciée et de-saisonnalisé, $\widehat{Var}((1-B)(1-B^{12}\log X_t = `r round(var(mdiff12diff1), 3)`$ avec la série deux fois de-saisonnalisé, $\widehat{Var}( (1-B)(1-B^{12})^2\log X_t ) = `r round(var(diff(mdiff12diff1, lag = 12)), 3)`$.
+Comme encore plus différencier ne fait pas baisser la variance, et comme on verra que la série est déjà stationnaire, on ne différenci plus. **stationnaire aussi de 2nd ordre si pour $\forall t \in \mathbb{Z}$:$\mathbb{E}(X_t^2) < \infty$$, $\mathbb{E}(X_t) = m$ et $\forall h \in \mathbb{Z} cov(X_t, X_{t+h} = \gamma(h)$**
+
 Peut-on déjà poser que $(1-B)(1-B^{12}) \log(X_t) = \varepsilon_t$, avec $\varepsilon_t$ un bruit blanc ?
 
 ```{r echo=FALSE}
@@ -209,7 +214,9 @@ Cela indique qu'il faut un modèle MA !
 
 Les $\varepsilon$ pour les deux modèls semblent stationnaire:
 
-```{r delta 2.0}
+```{r delta 2.0, eval=FALSE, include=FALSE}
+# Ca sert à quoi ?
+
 adf.test(fit.mult$residuals, k=1)
 adf.test(fit.mult$residuals, k=2)
 adf.test(fit.mult$residuals, k=3)
