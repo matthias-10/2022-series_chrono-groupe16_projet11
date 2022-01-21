@@ -46,8 +46,13 @@ Denommons les miles par mois avec la suite $(X_t)$.
 plot(donnees, type="l", main = "U.K. airlines: aircraft miles flown, by months (thousands)")
 #plot(donnees$date, log(donnees$miles), type = "l")
 ```
+L'examen du graphique montre une tendance croissante, il paraît peut-être même une croissance exponentielle.
+Le dernier cas a lieu si la variance croit avec la tendance.
+C'est vraisemblable qu'il a aussi une saisonnalité annuelle, c'est à dire de période 12 car les données sont mensuelles.
+Eux peuvent être prises compte par l'introduction d'une polynôme de retard $B^{12}$.
 
-En fait on voit que les données sont stationnaires? Comment est-ce possible : 
+
+**En fait on voit que les données sont stationnaires? Comment est-ce possible : **
 ```{r}
 adf.test(donnees$miles, alternative = "stationary")
 ```
@@ -201,6 +206,7 @@ par(mfrow=c(1,2), mar=c(3,4,1,1))
 acf(mdiff12diff1, lag.max = 30, ci.type = "ma")
 pacf(mdiff12diff1, lag.max = 30)
 ```
+=> MA(2,12) , cela explique aussi p(12-2) = p(10) (?) et la décroissement lente de pacf, la forme la fonction d'autocorrélation partielle estimée confirme qu'il peut bien s'agèrer d'un processus du moyenne mobile.
 
 *Ici on peut éxpliquer qu'est-ce que c'est, l'ACF.*
 En ce qui concerne l'ACF:
@@ -240,7 +246,7 @@ Autrement dit, une $\text{SARIMA}_{12}[(p= 0,d= 1,q= 2),(P= 0,D= 1,Q= 1)]$
 
 ```{r fitting a model}
 sarima_12.012.011 <- arima(log(miles), order = c(0,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
-
+sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c(0,0,1), perdiod=12)) #devrait être le même ?
 summary(sarima_12.012.011)
 coeftest(sarima_12.012.011) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
 ```
@@ -290,7 +296,7 @@ On peut utiliser un Box-Test.
 
 Pour le moment je sais pas trop comment expliquer / utiliser.
 
-```{r periodogramm}
+```{r periodogramm, echo=FALSE}
 periodogramm <- function(z){
   
 # Abbildung 3
@@ -348,6 +354,35 @@ pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(mod
 
 $$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
 
+```{r model 3}
+sarima_12.012.111 <- arima(log(miles), order = c(10,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
+# ar10 significativ, en plus pas de coefficients sign. !
+
+summary(sarima_12.012.111)
+coeftest(sarima_12.012.111) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+pacf(residuals(sarima_12.012.111), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
+```
+Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs de coéfficients.
+
+#### Modèle 4
+
+Plus parcimonieux que modèle 1, avec un MA(1):
+
+```{r  model 4}
+sarima_12.012.011 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
+sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c(0,0,1), perdiod=12)) #devrait être le même ?
+summary(sarima_12.012.011)
+coeftest(sarima_12.012.011) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+```
+
+```{r}
+par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
+acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
+pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+```
+Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
+
+
 ## Choix du modèle
 
 ### Base de test
@@ -357,7 +392,6 @@ La meilleure prévision détermine la modèle quelle on va choisir finalement.
 Pour comparer la qualité des prévision on peut utiliser le MSE (mean squared error) et leurs AIC :
 $\text{MSE} = \frac{1}{12}\sum_{t=Jan 1970}^{Dec 1970}(\hat{X_t} - X_t)^2$.
 
-### Calcul des modèles avec la base de test
 
 ```{r}
 # L'année 1970
@@ -367,6 +401,11 @@ miles.train = head(miles, length(miles)-12)
 
 # Puis MSE?
 ```
+
+### Calcul des modèles avec la base de test
+
+On estime les paramètres avec la base de donnée `miles.test` de largeur `r length(miles.test)` (largeur original `r length(miles)`.
+
 ```{r model avec miles.train}
 model <- arima(log(miles.train), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
 miles.prev <- exp(forecast(model, 12)$mean)
