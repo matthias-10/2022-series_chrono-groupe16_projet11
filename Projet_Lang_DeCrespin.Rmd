@@ -3,11 +3,25 @@ title: "Séries chronologiques Projet 2022"
 author: "Matthias Lang, Valentin De Crespin De Billy"
 date: "Janvier 30, 2022"
 output:
-  html_document: null
+  html_document:
+    toc: true
+    theme: united
+    # number_sections: TRUE
   pdf_document: default
   df_print: paged
 subtitle: Groupe 16, Sujet 11
 ---
+
+## Synthèse du présent rapport
+
+On a obtenu comme base de données les distances volées par un airline brittanique. Les données sont mensuelles pour la période 1963 - 1970.
+On voulait trouver un modèle pour décrire cette série temporaire et prévoir l'année 1971.
+Pour y arriver, on les a premièrement transformées avec un $\log$, différenciées et de-saisonnalisées.
+
+Puis, on a cherché des modèles et a trouvé plusieurs modèles validés, donc on les a comparés en utilisant AIC et de comparer leur puissance pour prévoir l'année 1971.
+Avec le bon modèle on a choisi, **insérer le modèle ici**, on l'a interpréter et faire la prévision de l'année 1971.
+
+***
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -25,7 +39,8 @@ wd <- "/home/matthias/Documents/Wien/Statistik/Erasmus/cours/serieschrono/projet
 setwd(wd)
 ```
 
-## Les bases
+
+## I - Les bases
 
 Dans ce projet il faut effectuer une analyse des données reçues, et faire une prévision pour l'année 1971.
 Nous allons utiliser R avec les packages `tseries` et `astsa`.
@@ -235,9 +250,17 @@ adf.test(fit.add$residuals, k=3)
 adf.test(fit.add$residuals, k=4)
 ```
 
-### Modèliser
+## II - Modèliser
 
-#### Modèle 1
+Dans le suivant on va essayer de traîner le bon modèle, bien sachant qu'il y plusieurs modèles qui peuvent apparaître.
+Pour le moment on ne va pas les interpréter, mais on va seulement chercher un modèle qui a:
+
+* des coéfficients sigificatifs
+* une forme canonique ainsi que restent que des bruits blancs (Box-Jenkins-Test)
+
+Pour tous modèles on va utiliser la base de données transformées et differenciées, c'est à dire les paramètres $d=1$ et $D=12$ avec saisonnalité 12 vont rester inchangé.
+
+### Modèle 1
 Après la dernière différenciation on a vu que les données pourraient être modélisées par un MA(2) avec saisonalité.
 Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
 
@@ -290,9 +313,9 @@ P-value de Ljung-Box-Test des résidues : $`r box`$.
 Après differencier et modèliser il faut tester s'il reste qu'un bruit blanc.
 On peut utiliser un Box-Test.
 
-### densité spectrale
+#### densité spectrale
 
-##### Fréquences
+###### Fréquences
 
 Pour le moment je sais pas trop comment expliquer / utiliser.
 
@@ -338,13 +361,13 @@ Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c
 
 
 
-#### Modèle 2
+### Modèle 2
 
 Ici on peut également essayer de faire un modèle additif 
 $$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
 autrement dit $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$.
 
-#### Modèle 3
+### Modèle 3
 
 Pour le modèle 1 on a eu un graphique pour les autocorrélations suivants.
 
@@ -364,7 +387,7 @@ pacf(residuals(sarima_12.012.111), main="corrélogramme partiel de residuals(mod
 ```
 Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs de coéfficients.
 
-#### Modèle 4
+### Modèle 4
 
 Plus parcimonieux que modèle 1, avec un MA(1):
 
@@ -383,7 +406,7 @@ pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(mod
 Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
 
 
-## Choix du modèle
+## III - Choix du modèle
 
 ### Base de test
 
@@ -473,8 +496,11 @@ mse = 443203
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
 
+### Intérpretation du modèle choisi
 
-## Prévision pour l'année 1971
+**Ici peut-etre aussi un cacul par main des paramètres du modèl**
+
+## IV - Prévision pour l'année 1971
 
 ```{r forecast}
 model1 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
