@@ -15,6 +15,7 @@
 *.run.xml
 *.ipynb*
 *.html
+*.pdf
 Latex_Vorlagen
 matthias_ignore
 

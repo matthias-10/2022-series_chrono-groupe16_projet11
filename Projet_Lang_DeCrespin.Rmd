@@ -24,11 +24,16 @@ Avec le bon modèle on a choisi, **insérer le modèle ici**, on l'a interpréte
 ***
 
 ```{r setup, include=FALSE}
+
+# https://www.imo.universite-paris-saclay.fr/~goude/Materials/time_series/cours5_ARMA.pdf
+# https://developpaper.com/arma-arima-box-jenkins-sarima-and-arimax-models-in-r-language-are-used-to-predict-time-series-data/
+# https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b
+
 knitr::opts_chunk$set(echo = FALSE)
 library(latex2exp) # pour "TeX("$\\alpha$")
 library(stargazer)
 library(dplyr)
-library(astsa)
+library(astsa) # https://github.com/nickpoison/astsa/blob/master/fun_with_astsa/fun_with_astsa.md
 library(changepoint)
 #library(caschrono) -> pas possible, dépendance de r-foreign -> R 3.6
 library(tseries)
@@ -39,8 +44,7 @@ wd <- "/home/matthias/Documents/Wien/Statistik/Erasmus/cours/serieschrono/projet
 setwd(wd)
 ```
 
-
-## I - Les bases
+## 1 - Les bases
 
 Dans ce projet il faut effectuer une analyse des données reçues, et faire une prévision pour l'année 1971.
 Nous allons utiliser R avec les packages `tseries` et `astsa`.
@@ -77,6 +81,38 @@ Mais il semble aussi qu'il ait une croissance exponentielle. Cela ne surprend pa
 Pour comparison: La variance de la première moitié est $`r round(var(head(miles,length(miles)/2)), -5)`$, la seconde moitié $`r round(var(tail(miles,length(miles)/2)), -5)`$.
 Afin de reducer cette propriété nous prenons le logarithme népérien (variances: $`r round(var(head(log(miles),length(miles)/2)), 3)`$ et $`r round(var(tail(log(miles),length(miles)/2)), 3)`$).
 
+```{r transformation de Box et Cox}
+#classes d'effectif par colonne
+BoxCox_diag = function(d, main){
+  eff = matrix(d, nrow=length(d)/6, ncol=6)
+  lambdas = cbind(colMeans(eff), 1:6)
+  
+  for (i in 1:6){
+    lambdas[i, 2] = diff(range(eff[,i]))
+  }
+  
+  plot(lambdas, xlim=c(0, max(lambdas)), ylim=c(0, max(lambdas)),
+       xlab = "moyenne",
+       ylab = "étendue",
+       main = main)
+  lines(c(0,15000),c(0,15000), col="grey")
+  # > proche de l'axe horizontale => il y a rien à faire, série stationnaire
+  # > inférieur de x=y => estimer lambda >1
+
+  # > BoxCox(miles, lambda = "auto")
+}
+par(mfrow=c(2,2))
+d = donnees$miles
+BoxCox_diag(d, main = "l'étendue en fonction \n de moyenne de X_t")
+d = BoxCox(miles, lambda = "auto")
+BoxCox_diag(d, main = "après transformation de \n Box et Cox")
+d = diff(diff(donnees$miles,12))[-(1:5)]
+BoxCox_diag(d, main = TeX("$(1-B)(1-B^{12})X_t$"))
+d = log(miles)
+BoxCox_diag(d, main = TeX("$\\log X_t$"))
+```
+
+
 ```{r}
 plot(donnees$date, log(miles), type= "l",
      xlab = "date",
@@ -106,7 +142,7 @@ Soit avec un modèl additif:
 #plot(m)
 # plot(decompose(miles, type = "multiplicative")) -> I think multiplicative is more fitting, as the lag and seasonality for the non-log at least are increasing with time
 ```
-```{r tendance linéare additive}
+```{r tendance linéare additive 1}
 fit.add = lm(log(miles) ~ date, data = donnees)
 
 par(mfrow=c(1,2))
@@ -136,11 +172,71 @@ plot(fit.add$residuals,
      xlab = "date",
      type = "l")
 ```
+```{r tendance linéare additive 2}
+fit.add = lm(log(miles) ~ date, data = donnees)
+fit  = lm(miles ~ date, data = donnees)
+par(mfrow=c(1,2))
+
+plot(donnees$date, miles, 
+     ylab = TeX("$(X_t)$"),
+     xlab = "date",
+     type = "l")
+abline(fit, col = "red")
+
+plot(donnees$date, log(miles), 
+     ylab = TeX("$\\log(X_t)$"),
+     xlab = "date",
+     type = "l")
+abline(fit.add, col = "red")
+
+legend("bottomright",
+       legend=c("Série observée",
+                "Régression"), 
+       col = c("black",
+               "red"),
+       lty = 1,
+       lwd = 2,
+       cex = 0.7,
+       text.col = "slategray4",
+       #title = "Années",
+       border = "white")
+```
+```{r tendance linéare additive}
+fit.add = lm(miles ~ date, data = donnees)
+
+par(mfrow=c(1,2))
+plot(donnees$date, miles, 
+     ylab = TeX("$
+                (X_t)$"),
+     xlab = "date",
+     type = "l")
+abline(fit.add, col = "red")
+
+legend("bottomright",
+       legend=c("Série observée",
+                "Régression"), 
+       col = c("black",
+               "red"),
+       lty = 1,
+       lwd = 2,
+       cex = 0.7,
+       text.col = "slategray4",
+       #title = "Années",
+       border = "white")
+
+# legend(legend="regression",
+#        x=-2,y=8.85,xjust=1,bty="n",
+#        fill = "red")
+
+plot(fit.add$residuals,
+     xlab = "date",
+     type = "l")
+```
 
 Ici un problème se présente:
 ```{r echo=FALSE}
 par(mar = c(3,4,4,2))
-acf(fit.add$residuals)
+acf(fit.add$residuals, lag.max = 90)
 ```
 L'autocorrélation ne decroit pas.
 
@@ -174,7 +270,7 @@ Est-ce qu'il vaut différencie encore une fois ? On va comparer la variance de l
 Car on a déjà trouvé que la tendance a disparu, et on voit en plus que différencier en supplémentaire fait augmenter la variance, il ne vaut pas encore différencier.
 
 La séries est-elle stationnaire ? Non, il y a encore la saisonalité.
-```{r eval=FALSE, include=FALSE}
+```{r echo=FALSE}
 # Est-ce que cela peut aider à decider entre le modèle additif et multiplicatif ?
 
 par(mfcol=c(2,2),mar=c(2,4,1,5),pch=20)
@@ -221,6 +317,8 @@ par(mfrow=c(1,2), mar=c(3,4,1,1))
 acf(mdiff12diff1, lag.max = 30, ci.type = "ma")
 pacf(mdiff12diff1, lag.max = 30)
 ```
+-> MA 1,2 et 12 SARIMA(x,1,2)(x,1,MA(12)) $\phi_{12}*B^{12}$
+
 => MA(2,12) , cela explique aussi p(12-2) = p(10) (?) et la décroissement lente de pacf, la forme la fonction d'autocorrélation partielle estimée confirme qu'il peut bien s'agèrer d'un processus du moyenne mobile.
 
 *Ici on peut éxpliquer qu'est-ce que c'est, l'ACF.*
@@ -250,7 +348,7 @@ adf.test(fit.add$residuals, k=3)
 adf.test(fit.add$residuals, k=4)
 ```
 
-## II - Modèliser
+## 2 - Modèliser
 
 Dans le suivant on va essayer de traîner le bon modèle, bien sachant qu'il y plusieurs modèles qui peuvent apparaître.
 Pour le moment on ne va pas les interpréter, mais on va seulement chercher un modèle qui a:
@@ -406,7 +504,7 @@ pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(mod
 Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
 
 
-## III - Choix du modèle
+## 3 - Choix du modèle
 
 ### Base de test
 
@@ -465,18 +563,6 @@ predict(test2, 12)
 ```
 
 
-
-```{r eval=FALSE, include=FALSE}
-#d'une vidéo Youtube
-# pour afficher avec les intervalles de confiance
-
-plot(Z)
-lines(mydata.pred$pred)
-lines(mydata.pred$se + 2* mydata.pred$se)
-lines(mydata.pred$se - 2* mydata.pred$se)
-
-```
-
 ### Comparaison et choix du modèle
 
 Ci-dessous tous les modèles qu'on a trouvé sont comparés dans un tableau.
@@ -487,6 +573,69 @@ De la même manière avec les AICs, qui indiquent aussi si un modèle est parcim
 sarima_12.001.011_AIC = 308
 mse = 443203
 ```
+
+### Comparaison avec autres méthodes
+
+#### auto.arima
+
+```{r echo=TRUE}
+auto.arima(log(miles), d=1, D=1)
+```
+
+#### ARMA minimal par la mèthode de coins
+
+```{r echo=TRUE}
+DELTA  = function(i,j, data=log(miles))
+{
+      rho = function(k) acf(data, plot="F")$acf[,1,1][abs(k)+1]
+      D = matrix(nrow=j, ncol=j)
+      
+      #if (i<= 0|j <= 1) {}
+        #return(NA) }
+      #else{
+        for (m in 1:j)
+        {
+          for (n in 1:j)
+          {
+            D[m,n] = rho(i+m-n) #paste(m,", ",n)
+          }
+        }
+      #}
+  return( det(D) )
+}
+
+minArma = matrix(nrow=6, ncol=6)
+      
+      for (r in 1:6)
+      {
+        for (c in 1:6)
+        {
+          minArma[r,c] = DELTA(r,c)
+          minArma
+        }
+      }
+
+minArma #ARMA(1,1) ou ARMA(1,3) au maximum
+```
+```{r echo=FALSE}
+library(ggplot2)
+library(reshape2)
+
+minArma2 = melt(minArma)
+colnames(minArma2) <- c('q','p','DELTA')
+minArma2$q <- factor(minArma2$q)
+minArma2$p <- factor(minArma2$p)
+                       
+ggplot(minArma2, aes(x = p, y = q)) +
+    geom_tile(aes(fill=DELTA)) + 
+    geom_text(aes(label = sprintf("%1.3f",DELTA)), vjust = 1) +
+    scale_fill_gradientn(colours=c("red","red","white","green","green"),
+                         values=c(0,0.01,0.05,0.25,1),
+                         guide = "none", na.value = "white") +
+    coord_equal() +
+    labs(title = TeX("$\\Delta(p,q)$"))
+```
+
 
 
 | Model                                     | AIC                           | MSE         |
@@ -500,7 +649,7 @@ mse = 443203
 
 **Ici peut-etre aussi un cacul par main des paramètres du modèl**
 
-## IV - Prévision pour l'année 1971
+## 4 - Prévision pour l'année 1971
 
 ```{r forecast}
 model1 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
@@ -509,6 +658,11 @@ fvalues <- forecast(model1, 12)
 print(fvalues)
 plot(fvalues, col.main = "red")
 plot(forecast(sarima_12.012.011,12))
+
+# lines(mydata.pred$pred)
+# lines(mydata.pred$se + 2* mydata.pred$se)
+# lines(mydata.pred$se - 2* mydata.pred$se)
+
 ```
 
 > Tu déconnes avec tes tonnes de projets
