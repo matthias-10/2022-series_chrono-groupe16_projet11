@@ -70,11 +70,6 @@ Le dernier cas a lieu si la variance croit avec la tendance.
 C'est vraisemblable qu'il a aussi une saisonnalité annuelle, c'est à dire de période 12 car les données sont mensuelles.
 Eux peuvent être prises compte par l'introduction d'une polynôme de retard $B^{12}$.
 
-
-**En fait on voit que les données sont stationnaires? Comment est-ce possible : **
-```{r}
-adf.test(donnees$miles, alternative = "stationary")
-```
 #### Transformation
 
 Mais il semble aussi qu'il ait une croissance exponentielle. Cela ne surprend pas avec une scale non-négative.
@@ -111,9 +106,18 @@ BoxCox_diag(d, main = TeX("$(1-B)(1-B^{12})X_t$"))
 d = log(miles)
 BoxCox_diag(d, main = TeX("$\\log X_t$"))
 ```
+Les points se trouvent un peu loin sous la diagonale, et ils sont d'un coup aussi déjà proche de l'axe.
+Le meilleur sera de soit une transformation de Box et Cox, soit qu'on affirme qu'ils sont déjà stationnaire.
+Mais comme vu, le logharithme népérien fait aussi en sorte que les variances soient égales, même si Box et Cox seraient mieux.
+On va l'utiliser pour son aise dans la suite.
 
-
+On voit que les données sont déja stationnaire, même si on peut observer toujours une tendance et une saisonnalité.
+Ce fait est sûrement dû au petit nombre de données.
 ```{r}
+adf.test(log(donnees$miles), alternative = "stationary", k=0) #k=0 <=> standard dick-fuller test
+```
+
+```{r logX, echo=FALSE}
 plot(donnees$date, log(miles), type= "l",
      xlab = "date",
      ylab = TeX("$\\log(X_t)$"),
@@ -133,7 +137,7 @@ Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exem
 
 En gros, on a deux possibilités pour supprimer la tendance et faire en sorte que $\mathbb{E}[X_t] = 0$, soustraire une tendance ou différencier d'un ordre quelquonque.
 
-##### traiter de la tendance en mode additive
+##### traiter de la tendance de manière additive
 
 Soit avec un modèl additif:
 
@@ -242,7 +246,7 @@ L'autocorrélation ne decroit pas.
 
 ##### traiter de la tendance en différenciant
 
-Soit en différencier:
+##### Soit en différencier une fois:
 $$log(X_t) - log(X_{t-1}) = (1-B)\log(X_t)$$
 ```{r delta}
 mdiff1 = diff(log(miles), lag = 1, difference = 1) #12
@@ -266,10 +270,12 @@ summary(fit.mult)$coefficients
 ```
 Laquelle mèthode choisir ? Généralment différencier est mieux.
 
+###### différencier deux fois
+
 Est-ce qu'il vaut différencie encore une fois ? On va comparer la variance de la série une fois différenciée, $\widehat{Var}((1-B)\log X_t = `r round(var(mdiff1), 3)`$ avec la série deux fois différencie, $\widehat{Var}((1-B)^2\log X_t = `r round(var(diff(mdiff1, lag = 1, difference = 1)), 3)`$ ($\widehat{Var}(\log X_t = `r round(var(log(miles)), 3)`$).
 Car on a déjà trouvé que la tendance a disparu, et on voit en plus que différencier en supplémentaire fait augmenter la variance, il ne vaut pas encore différencier.
 
-La séries est-elle stationnaire ? Non, il y a encore la saisonalité.
+La séries est-elle vraiment stationnaire ? Non, il y a sûrement encore la saisonalité.
 ```{r echo=FALSE}
 # Est-ce que cela peut aider à decider entre le modèle additif et multiplicatif ?
 
@@ -453,7 +459,7 @@ periodogramm(mdiff1)
 ```
 
 Pour les données différenciées il n'y a pas une courbe raide vers le zéro (voir a, fréquence de Fourier $\omega_k = \frac{2\pi k}{n}$)).
-En outre, le log-périodogrammes des résidus tombe moins vite pour les résidus des données différenciées (voir e) qu'implique des résidues stationnairs.
+En outre, le log-périodogrammes des résidus tombe moins vite pour les résidus des données différenciées (voir e) qu'implique des résidues stationnaires.
 
 Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c\omega^{-1}$ , dann ist sie nicht integrierbar, was unvereinbar ist mit Stationarität, weil die Varianz eines stationären Prozesses gegeben ist durch das Integral der Spektraldichte. In der Praxis ist $f$ unbekannt und muss durch einen Proxy ersetzt werden, z.B. durch das Periodogramm $I$. Für eine graphische Einschätzung der Stationarität kann man $I(\omega)$ gegen $\omega$ plotten und mit $h(\omega ) = c\omega^{-1}$ vergleichen. Einfacher ist es aber, wenn man $\log(I(\omega))$ gegen $\log(\omega)$ plottet und mit Geraden der Steigung -1 vergleicht (siehe Abbildung 3).
 
@@ -583,12 +589,6 @@ mse = 443203
 
 ### Comparaison avec autres méthodes
 
-#### auto.arima
-
-```{r echo=TRUE}
-auto.arima(log(miles), d=1, D=1)
-```
-
 #### La mèthode de coins
 
 On veut avoir un ARMA (ARIMA/SARIMA) minimal.
@@ -681,6 +681,14 @@ ggplot(minArma2, aes(x = p, y = q)) +
 ```
 
 Pour un SARIMA((p,1,q),(P,1,Q))[12] on peut pas puiser les nombre d'estimateurs pour D et Q de ce graphique. Mais il semble comme s'il y a un saisonnalité pour Q.
+
+#### auto.arima
+
+C'est dernier point est affirmé par l'utilisation de la fonction `auto.arima`.
+
+```{r echo=TRUE}
+auto.arima(log(miles), d=1, D=1)
+```
 
 ### Intérpretation du modèle choisi
 
