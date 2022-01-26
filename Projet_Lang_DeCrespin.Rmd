@@ -569,10 +569,17 @@ Ci-dessous tous les modèles qu'on a trouvé sont comparés dans un tableau.
 Le plus petits le MSE, le meilleur.
 De la même manière avec les AICs, qui indiquent aussi si un modèle est parcimonieux. Ce critère repose donc sur un compromis entre la qualité de l'ajustement et la complexité du modèle, en pénalisant les modèles ayant un grand nombre de paramètres.
 
-```{r placeholder}
+```{r placeholder, include=FALSE}
 sarima_12.001.011_AIC = 308
 mse = 443203
 ```
+
+| Model                                     | AIC                           | MSE         |
+|-------------------------------------------|-------------------------------|-------------|
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
 
 ### Comparaison avec autres méthodes
 
@@ -584,44 +591,42 @@ auto.arima(log(miles), d=1, D=1)
 
 #### ARMA minimal par la mèthode de coins
 
-```{r echo=TRUE}
-DELTA  = function(i,j, data=log(miles))
-{
-      rho = function(k) acf(data, plot="F")$acf[,1,1][abs(k)+1]
-      D = matrix(nrow=j, ncol=j)
-      
-      #if (i<= 0|j <= 1) {}
-        #return(NA) }
-      #else{
-        for (m in 1:j)
-        {
-          for (n in 1:j)
+```{r fonction methode de coins, echo=TRUE}
+minArma = function(series=log(miles), taille = 6){
+  DELTA  = function(i,j, data=series)
+  {
+        rho = function(k) acf(data, plot="F")$acf[,1,1][abs(k)+1]
+        D = matrix(nrow=j, ncol=j)
+  
+          for (m in 1:j)
           {
-            D[m,n] = rho(i+m-n) #paste(m,", ",n)
+            for (n in 1:j)
+            {
+              D[m,n] = rho(i+m-n)
+            }
+          }
+    return( det(D) )
+  }
+  
+  minArma = matrix(nrow=taille, ncol=taille)
+        
+        for (r in 1:taille)
+        {
+          for (c in 1:taille)
+          {
+            minArma[r,c] = DELTA(r,c)
+            minArma
           }
         }
-      #}
-  return( det(D) )
+  
+  return(minArma)
 }
-
-minArma = matrix(nrow=6, ncol=6)
-      
-      for (r in 1:6)
-      {
-        for (c in 1:6)
-        {
-          minArma[r,c] = DELTA(r,c)
-          minArma
-        }
-      }
-
-minArma #ARMA(1,1) ou ARMA(1,3) au maximum
 ```
-```{r echo=FALSE}
+```{r minimal ARMA, echo=FALSE}
 library(ggplot2)
 library(reshape2)
 
-minArma2 = melt(minArma)
+minArma2 = melt(minArma())
 colnames(minArma2) <- c('q','p','DELTA')
 minArma2$q <- factor(minArma2$q)
 minArma2$p <- factor(minArma2$p)
@@ -630,20 +635,46 @@ ggplot(minArma2, aes(x = p, y = q)) +
     geom_tile(aes(fill=DELTA)) + 
     geom_text(aes(label = sprintf("%1.3f",DELTA)), vjust = 1) +
     scale_fill_gradientn(colours=c("red","red","white","green","green"),
-                         values=c(0,0.01,0.05,0.25,1),
+                         values=c(0,0.01,0.05,0.10,1),
                          guide = "none", na.value = "white") +
     coord_equal() +
-    labs(title = TeX("$\\Delta(p,q)$"))
+    labs(title = TeX("matrice des $\\hat{\\Delta}(p,q)$ de la série $(\\log(X_t))$"))
+```
+```{r minimial ARIMA, echo=FALSE}
+minArma2 = melt(minArma(series=mdiff12diff1))
+colnames(minArma2) <- c('q','p','DELTA')
+minArma2$q <- factor(minArma2$q)
+minArma2$p <- factor(minArma2$p)
+minArma2$DELTA = abs(minArma2$DELTA)
+
+ggplot(minArma2, aes(x = p, y = q)) +
+    geom_tile(aes(fill=DELTA)) + 
+    geom_text(aes(label = sprintf("%1.3f",DELTA)), vjust = 1)  +
+    scale_fill_gradientn(colours=c("red","red","white","green","green"),
+                         values=c(0,0.05,0.2,0.3,1),
+                         guide = "none", na.value = "white") +
+    coord_equal() +
+    labs(title = TeX("matrice des $\\hat{\\Delta}(p,q)$ de la série $( | (1-B)(1-B^{12})(\\log(X_t)) | )$")) #log()
 ```
 
+```{r minimial SARIMA, echo=FALSE}
+minArma2 = melt(minArma(series=mdiff12diff1, taille = 13))
+colnames(minArma2) <- c('q','p','DELTA')
+minArma2$q <- factor(minArma2$q)
+minArma2$p <- factor(minArma2$p)
+minArma2$DELTA = abs(minArma2$DELTA)
 
+ggplot(minArma2, aes(x = p, y = q)) +
+    geom_tile(aes(fill=DELTA)) + 
+    geom_text(aes(label = sprintf("%1.1f",DELTA)), vjust = 1)  +
+    scale_fill_gradientn(colours=c("red","red","white","green","green"),
+                         values=c(0,0.05,0.2,0.3,1),
+                         guide = "none", na.value = "white") +
+    coord_equal() +
+    labs(title = TeX("matrice des $\\hat{\\Delta}(p,q)$ de la série $( | (1-B)(1-B^{12})(\\log(X_t)) | )$")) #log()
+```
 
-| Model                                     | AIC                           | MSE         |
-|-------------------------------------------|-------------------------------|-------------|
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+ARMA(1,1) ou ARMA(1,3) au maximum, ou ARIMA(1,2). Pour un SARIMA((p,1,q),(P,1,Q))[12] on peut pas puiser les nombre d'estimateur pour D et Q de ce graphique. Mais il semble comme s'il y a un saisonnalité pour Q.
 
 ### Intérpretation du modèle choisi
 
