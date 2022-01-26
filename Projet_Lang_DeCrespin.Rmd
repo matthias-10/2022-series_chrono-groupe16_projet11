@@ -589,7 +589,11 @@ mse = 443203
 auto.arima(log(miles), d=1, D=1)
 ```
 
-#### ARMA minimal par la mèthode de coins
+#### La mèthode de coins
+
+On veut avoir un ARMA (ARIMA/SARIMA) minimal.
+On ne connait pas les vrais $\Delta$, mais on peut les estimer. 
+On pourrait aussi tester s'ils soient significatifs, mais cela est très compliqué.
 
 ```{r fonction methode de coins, echo=TRUE}
 minArma = function(series=log(miles), taille = 6){
@@ -640,6 +644,8 @@ ggplot(minArma2, aes(x = p, y = q)) +
     coord_equal() +
     labs(title = TeX("matrice des $\\hat{\\Delta}(p,q)$ de la série $(\\log(X_t))$"))
 ```
+ARMA(1,1) ou ARMA(1,3) au maximum.
+
 ```{r minimial ARIMA, echo=FALSE}
 minArma2 = melt(minArma(series=mdiff12diff1))
 colnames(minArma2) <- c('q','p','DELTA')
@@ -656,7 +662,7 @@ ggplot(minArma2, aes(x = p, y = q)) +
     coord_equal() +
     labs(title = TeX("matrice des $\\hat{\\Delta}(p,q)$ de la série $( | (1-B)(1-B^{12})(\\log(X_t)) | )$")) #log()
 ```
-
+ARIMA(1,2). 
 ```{r minimial SARIMA, echo=FALSE}
 minArma2 = melt(minArma(series=mdiff12diff1, taille = 13))
 colnames(minArma2) <- c('q','p','DELTA')
@@ -674,7 +680,7 @@ ggplot(minArma2, aes(x = p, y = q)) +
     labs(title = TeX("matrice des $\\hat{\\Delta}(p,q)$ de la série $( | (1-B)(1-B^{12})(\\log(X_t)) | )$")) #log()
 ```
 
-ARMA(1,1) ou ARMA(1,3) au maximum, ou ARIMA(1,2). Pour un SARIMA((p,1,q),(P,1,Q))[12] on peut pas puiser les nombre d'estimateur pour D et Q de ce graphique. Mais il semble comme s'il y a un saisonnalité pour Q.
+Pour un SARIMA((p,1,q),(P,1,Q))[12] on peut pas puiser les nombre d'estimateurs pour D et Q de ce graphique. Mais il semble comme s'il y a un saisonnalité pour Q.
 
 ### Intérpretation du modèle choisi
 
