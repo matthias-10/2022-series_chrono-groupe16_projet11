@@ -72,7 +72,7 @@ Eux peuvent être prises compte par l'introduction d'une polynôme de retard $B^
 
 #### Transformation
 
-Mais il semble aussi qu'il ait une croissance exponentielle. Cela ne surprend pas avec une scale non-négative.
+Mais il semble aussi qu'il ait une croissance exponentielle. Cela ne surprend pas avec une échelle non-négative.
 Pour comparison: La variance de la première moitié est $`r round(var(head(miles,length(miles)/2)), -5)`$, la seconde moitié $`r round(var(tail(miles,length(miles)/2)), -5)`$.
 Afin de reducer cette propriété nous prenons le logarithme népérien (variances: $`r round(var(head(log(miles),length(miles)/2)), 3)`$ et $`r round(var(tail(log(miles),length(miles)/2)), 3)`$).
 
@@ -107,16 +107,42 @@ d = log(miles)
 BoxCox_diag(d, main = TeX("$\\log X_t$"))
 ```
 Les points se trouvent un peu loin sous la diagonale, et ils sont d'un coup aussi déjà proche de l'axe.
-Le meilleur sera de soit une transformation de Box et Cox, soit qu'on affirme qu'ils sont déjà stationnaire.
-Mais comme vu, le logharithme népérien fait aussi en sorte que les variances soient égales, même si Box et Cox seraient mieux.
-On va l'utiliser pour son aise dans la suite.
+Le meilleur sera, soit une transformation de Box et Cox, soit qu'on affirme qu'ils sont déjà stationnaire.
+On trouve pour le transformation de Box et Cox un $lambda=$$`r forecast::BoxCox.lambda(miles)`$, afin de faire une transformation en forme de $\frac{X_t^{\lambda} -1}{\lambda}$.
+Pour comparaison, les données originales et les transformation sont plotées ci-dessous, standarisées.
+On voit que la transformation de Box et Cox baisse la variance pour l'année 1971, et augmente la variance pour la première année. Mais il n'y a pas une grande différence par rapport à $\\log(X_t)$.
 
-On voit que les données sont déja stationnaire, même si on peut observer toujours une tendance et une saisonnalité.
-Ce fait est sûrement dû au petit nombre de données.
+```{r echo=FALSE}
+plot((BoxCox(miles, lambda = "auto")-mean(BoxCox(miles, lambda = "auto")))/sd(BoxCox(miles, lambda = "auto")), col = "blue", 
+     type= "p",
+     ylab = "données centralisées")
+points((log(miles)-mean(log(miles)))/sd(log(miles)), col = "green")
+points((miles-mean(miles))/sd(miles), type="l", col="red")
+
+legend("topleft",
+       legend = c(
+         TeX("séries $X_t$"),
+         TeX("$\\log(X_t)$"),
+         TeX("$\\frac{X_t^{\\lambda} -1}{\\lambda}$")),
+       col = c("red","blue","green"),
+       lty = 1,
+       lwd = 2,
+       cex = 0.7,
+       text.col = "slategray4",
+       #title = "Années",
+       border = "white")
+```
+
+
+Mais comme vu, le logharithme népérien fait aussi en sorte que les variances soient égales, même si Box et Cox serait mieux.
+On va l'utiliser pour sa simplicité dans la suite.
+
+On voit que les données sont déja stationnaire:
 ```{r}
 adf.test(log(donnees$miles), alternative = "stationary", k=0) #k=0 <=> standard dick-fuller test
 ```
 
+Du coup, on va utiliser les données transformées comme affichées:
 ```{r logX, echo=FALSE}
 plot(donnees$date, log(miles), type= "l",
      xlab = "date",
@@ -132,6 +158,7 @@ dw = dwtest(log(miles) ~ date,
 On a fait un Durbin-Watson Test: $H_0$ afin de savoir si l'autocorrelation des erreurs estimées d'un modèle linéare `log(miles) ~ date` est égal à 0, qui est rejetée avec une valeur p de $`r round(dw, 3)`$. 
 Clairement on rejète $H_0$.
 Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exemple l'égalité des variances et l'indépandence des valeurs et des erreurs.
+On va alors essayer de les modèliser et faire une prévision avec un modèle SARIMA.
 
 ### La tendance
 
@@ -139,11 +166,11 @@ En gros, on a deux possibilités pour supprimer la tendance et faire en sorte qu
 
 ##### traiter de la tendance de manière additive
 
-Soit avec un modèl additif:
+Soit un modèl additif, dans lequel on modéliser plusieurs componants lesquelles, en somme, sont la série d'origine :
 
-```{r eval=FALSE, include=FALSE}
-#m = decompose(log(miles), type = "additive")
-#plot(m)
+```{r echo=FALSE}
+m = decompose(log(miles), type = "additive")
+plot(m)
 # plot(decompose(miles, type = "multiplicative")) -> I think multiplicative is more fitting, as the lag and seasonality for the non-log at least are increasing with time
 ```
 ```{r tendance linéare additive 1}
@@ -248,6 +275,11 @@ L'autocorrélation ne decroit pas.
 
 ##### Soit en différencier une fois:
 $$log(X_t) - log(X_{t-1}) = (1-B)\log(X_t)$$
+```{r echo=FALSE}
+plot(decompose(miles, type = "multiplicative")) 
+```
+I think multiplicative is more fitting, as the lag and seasonality for the non-log at least are increasing with time
+
 ```{r delta}
 mdiff1 = diff(log(miles), lag = 1, difference = 1) #12
 # difference to the first order
@@ -269,6 +301,11 @@ Il ne reste pas une tendence. Ci-dessous on voit que il n'y a ni une tendance ni
 summary(fit.mult)$coefficients
 ```
 Laquelle mèthode choisir ? Généralment différencier est mieux.
+
+```{r echo=FALSE}
+par(mar = c(3,4,4,2))
+acf(fit.mult$residuals, lag.max = 90)
+```
 
 ###### différencier deux fois
 
@@ -306,7 +343,7 @@ points(tail(donnees$date, length(mdiff12diff1)),
 abline(h=0, col = "grey")
 ```
 
-Pour tester si la série est stationnaire nous utilisons l'Augmented Dickey-Fuller t-statistic test. 
+Pour tester si la série est stationnaire nous utilisons le Dickey-Fuller t-statistic test. 
 ADF test is a test to check whether the series has a unit root or not. If it exists, the series has a linear trend. However, if it’s not, we can say that the model is stationary.
 
 ```{r}
@@ -318,12 +355,7 @@ Comme encore plus différencier ne fait pas baisser la variance, et comme on ver
 
 Peut-on déjà poser que $(1-B)(1-B^{12}) \log(X_t) = \varepsilon_t$, avec $\varepsilon_t$ un bruit blanc ?
 
-```{r echo=FALSE}
-par(mfrow=c(1,2), mar=c(3,4,1,1))
-acf(mdiff12diff1, lag.max = 30, ci.type = "ma")
-pacf(mdiff12diff1, lag.max = 30)
-```
--> MA 1,2 et 12 SARIMA(x,1,2)(x,1,MA(12)) $\phi_{12}*B^{12}$
+
 
 => MA(2,12) , cela explique aussi p(12-2) = p(10) (?) et la décroissement lente de pacf, la forme la fonction d'autocorrélation partielle estimée confirme qu'il peut bien s'agèrer d'un processus du moyenne mobile.
 
@@ -341,6 +373,7 @@ Les $\varepsilon$ pour les deux modèls semblent stationnaire:
 
 ```{r delta 2.0, eval=FALSE, include=FALSE}
 # Ca sert à quoi ?
+# k=0 !!!
 
 adf.test(fit.mult$residuals, k=1)
 adf.test(fit.mult$residuals, k=2)
@@ -356,15 +389,32 @@ adf.test(fit.add$residuals, k=4)
 
 ## 2 - Modèliser
 
+
 Dans le suivant on va essayer de traîner le bon modèle, bien sachant qu'il y plusieurs modèles qui peuvent apparaître.
+Après qu'on a transformé les données on a également déjà différencié.
+On va toujours utiliser une modele de la forme ARIMA((p,d,q),(P,D,Q))[12].
+12, parce qu'on a des données annuelles. Et en differenciant on a aussi déja trouver que $d=1$ et $D=1$.
+Il reste alors a trouver les bon nombre de p et P pour un modèle AR, q et Q pour un modèle MA, ou même les deux (on considère que les AR et MA sont un cas particulier d'un ARIMA avec respectivement $q=0$ et $p=0$).
+
 Pour le moment on ne va pas les interpréter, mais on va seulement chercher un modèle qui a:
 
 * des coéfficients sigificatifs
 * une forme canonique ainsi que restent que des bruits blancs (Box-Jenkins-Test)
+* des $\varepsilon_t$ non corrélés.
+
+On n'incluit pas les modèles qui ne satisfont pas ces critères.
 
 Pour tous modèles on va utiliser la base de données transformées et differenciées, c'est à dire les paramètres $d=1$ et $D=12$ avec saisonnalité 12 vont rester inchangé.
 
 ### Modèle 1
+
+```{r echo=FALSE}
+par(mfrow=c(1,2), mar=c(3,4,1,1))
+acf(mdiff12diff1, lag.max = 60, ci.type = "ma")
+pacf(mdiff12diff1, lag.max = 60)
+```
+La chute des valeurs vers 0 de $\hat\rho$ indique un modèle MA(q). On suppose que le bâton qui sort avec un decalage de 12 est dû au hasard.
+On voit dans le diagramme PACF 
 Après la dernière différenciation on a vu que les données pourraient être modélisées par un MA(2) avec saisonalité.
 Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
 
@@ -377,7 +427,6 @@ sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c
 summary(sarima_12.012.011)
 coeftest(sarima_12.012.011) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
 ```
-
 
 ```{r echo=FALSE}
 par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
@@ -471,6 +520,15 @@ Ici on peut également essayer de faire un modèle additif
 $$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
 autrement dit $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$.
 
+
+```{r echo=FALSE}
+par(mfrow=c(1,2), mar=c(3,4,1,1))
+acf(mdiff12diff1, lag.max = 30, ci.type = "ma")
+pacf(mdiff12diff1, lag.max = 30)
+```
+-> MA 1,2 et 12 SARIMA(x,1,2)(x,1,MA(12)) $\phi_{12}*B^{12}$
+
+
 ### Modèle 3
 
 Pour le modèle 1 on a eu un graphique pour les autocorrélations suivants.
@@ -482,12 +540,12 @@ pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(mod
 $$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
 
 ```{r model 3}
-sarima_12.012.111 <- arima(log(miles), order = c(10,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
+modele3 <- arima(log(miles), order = c(10,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
 # ar10 significativ, en plus pas de coefficients sign. !
 
-summary(sarima_12.012.111)
-coeftest(sarima_12.012.111) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
-pacf(residuals(sarima_12.012.111), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
+summary(modele3)
+coeftest(modele3) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+pacf(residuals(modele3), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
 ```
 Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs de coéfficients.
 
@@ -496,16 +554,16 @@ Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs d
 Plus parcimonieux que modèle 1, avec un MA(1):
 
 ```{r  model 4}
-sarima_12.012.011 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
+modele4 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
 sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c(0,0,1), perdiod=12)) #devrait être le même ?
-summary(sarima_12.012.011)
-coeftest(sarima_12.012.011) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+summary(modele4)
+coeftest(modele4) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
 ```
 
 ```{r}
 par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
-acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
-pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+acf1 = acf(residuals(modele4), ci.type="ma", lag.max= 30)
+pacf(residuals(modele4), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
 ```
 Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
 
