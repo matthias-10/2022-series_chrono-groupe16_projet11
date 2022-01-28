@@ -1,6 +1,6 @@
 ---
 title: "Séries chronologiques Projet 2022"
-author: "Matthias Lang, Valentin De Crespin De Billy"
+author: "Matthias Lang"
 date: "Janvier 30, 2022"
 output:
   pdf_document: default
@@ -9,7 +9,7 @@ output:
     theme: united
     # number_sections: TRUE
   df_print: paged
-subtitle: Groupe 16, Sujet 11
+subtitle: "Sujet 11"
 ---
 
 ## Synthèse du présent rapport
@@ -21,13 +21,18 @@ Pour y arriver, on les a premièrement transformées avec un $\log$, différenci
 Puis, on a cherché des modèles et a trouvé plusieurs modèles validés, donc on les a comparés en utilisant AIC et de comparer leur puissance pour prévoir l'année 1971.
 Avec le bon modèle on a choisi, **insérer le modèle ici**, on l'a interpréter et faire la prévision de l'année 1971.
 
+*** log() <-> exp() for ease of interpretation ***
+*** diagnostics model 4: decompose residuals ***
 ***
 
 ```{r setup, include=FALSE}
 
 # https://www.imo.universite-paris-saclay.fr/~goude/Materials/time_series/cours5_ARMA.pdf
 # https://developpaper.com/arma-arima-box-jenkins-sarima-and-arimax-models-in-r-language-are-used-to-predict-time-series-data/
+# https://developpaper.com/arma-arima-box-jenkins-sarima-and-arimax-models-in-r-language-are-used-to-predict-time-series-data/
 # https://towardsdatascience.com/statistical-test-for-time-series-a57d9155d09b
+# https://autobox.com/pdfs/ARIMA%20FLOW%20CHART.pdf
+# https://www.youtube.com/watch?v=N2AVuGV-eQk
 
 knitr::opts_chunk$set(echo = FALSE)
 library(latex2exp) # pour "TeX("$\\alpha$")
@@ -155,7 +160,7 @@ plot(donnees$date, log(miles), type= "l",
 dw = dwtest(log(miles) ~ date, 
             data = donnees)$p.value
 ```
-On a fait un Durbin-Watson Test: $H_0$ afin de savoir si l'autocorrelation des erreurs estimées d'un modèle linéare `log(miles) ~ date` est égal à 0, qui est rejetée avec une valeur p de $`r round(dw, 3)`$. 
+On a fait un Durbin-Watson Test: $H_0$ afin de savoir si l'autocorrélation des erreurs estimées d'un modèle linéare `log(miles) ~ date` est égal à 0, qui est rejetée avec une valeur p de $`r round(dw, 3)`$. 
 Clairement on rejète $H_0$.
 Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exemple l'égalité des variances et l'indépandence des valeurs et des erreurs.
 On va alors essayer de les modèliser et faire une prévision avec un modèle SARIMA.
@@ -274,14 +279,14 @@ L'autocorrélation ne decroit pas.
 ##### traiter de la tendance en différenciant
 
 ##### Soit en différencier une fois:
-$$log(X_t) - log(X_{t-1}) = (1-B)\log(X_t)$$
+$$(1-B)\log(X_t)=log(X_t) - log(X_{t-1})$$
 ```{r echo=FALSE}
 plot(decompose(miles, type = "multiplicative")) 
 ```
 I think multiplicative is more fitting, as the lag and seasonality for the non-log at least are increasing with time
 
 ```{r delta}
-mdiff1 = diff(log(miles), lag = 1, difference = 1) #12
+mdiff1 = diff(log(miles), lag = 1, difference = 1)
 # difference to the first order
 
 fit.mult = lm(mdiff1 ~ tail( donnees$date, length(mdiff1) ))
@@ -304,7 +309,7 @@ Laquelle mèthode choisir ? Généralment différencier est mieux.
 
 ```{r echo=FALSE}
 par(mar = c(3,4,4,2))
-acf(fit.mult$residuals, lag.max = 90)
+acf(fit.mult$residuals,lag.max = 90)
 ```
 
 ###### différencier deux fois
@@ -330,6 +335,7 @@ pacf(fit.mult$residuals)
 On introduit une componente saisonnal dans le modèl proposé.
 
 $$(1-B)(1-B^{12}) \log(X_t) $$
+$$(1-B^{12}) \log(X_t) = log(X_t) - log(X_{12})$$
 ```{r test pour station.}
 mdiff12diff1 = diff(mdiff1, lag=12, differences=1)
 #tsdisplay(mdiff12diff1, ci.type = "ma", main = "(1-B)(1-B^12)X_t")
@@ -357,7 +363,7 @@ Peut-on déjà poser que $(1-B)(1-B^{12}) \log(X_t) = \varepsilon_t$, avec $\var
 
 
 
-=> MA(2,12) , cela explique aussi p(12-2) = p(10) (?) et la décroissement lente de pacf, la forme la fonction d'autocorrélation partielle estimée confirme qu'il peut bien s'agèrer d'un processus du moyenne mobile.
+*=> MA(2,12) , cela explique aussi p(12-2) = p(10) (?) et la décroissement lente de pacf, la forme la fonction d'autocorrélation partielle estimée confirme qu'il peut bien s'agèrer d'un processus du moyenne mobile.*
 
 *Ici on peut éxpliquer qu'est-ce que c'est, l'ACF.*
 En ce qui concerne l'ACF:
@@ -397,9 +403,9 @@ Il reste alors a trouver les bon nombre de p et P pour un modèle AR, q et Q pou
 
 Pour le moment on ne va pas les interpréter, mais on va seulement chercher un modèle qui a:
 
-* des coéfficients sigificatifs
-* une forme canonique ainsi que restent que des bruits blancs (Box-Jenkins-Test)
-* des $\varepsilon_t$ non corrélés.
+* des coéfficients significatifs
+* une forme canonique ainsi que restent que des bruits blancs (Box-Jenkins-Test), c.a.d.
+* des $\varepsilon_t$ non corrélés, avec variance constante et sans structure détérministe.
 
 On n'incluit pas les modèles qui ne satisfont pas ces critères.
 
@@ -425,7 +431,7 @@ Il y a une chute des $\hat\rho(h)$ vers 0, $\hat\rho(1)$ et $\hat\rho(2)$ sorten
 On voit dans le diagramme PACF des bâtons sortir à h= 1, 2, 4, 10, 11 (et 12, celle ci a était pris en charge par Q=1) et après il n'y a plus de bâtons significatifs.
 Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
 
-$$(1-\phi_1B-\phi_2B^2-\phi_3B^3-\phi_4B^4-\phi_5B^5-\phi_6B^6-\phi_7B^7-\phi_8B^8-\phi_9B^9-\phi_{10}B^{10}-\phi_{11}B^{11})(1-\phi_{12}B^{12}) (1-B)(1-B^{12}) \log(X_t) = (1-\theta_{12}B^{12})\epsilon_t$$
+$$(1-\phi_1B-\phi_2B^2-\phi_3B^3-\phi_4B^4-\phi_5B^5-\phi_6B^6-\phi_7B^7-\phi_8B^8-\phi_9B^9-\phi_{10}B^{10}-\phi_{11}B^{11}) (1-B)(1-B^{12}) \log(X_t) = (1-\theta_{12}B^{12})\epsilon_t$$
 Autrement dit, une $\text{SARIMA}_{12}[(p= 11,d= 1,q= 0),(P= 0,D= 1,Q= 1)]$. On va tenter cette possible modèle.
 
 ##### b) diagnoses
@@ -449,9 +455,9 @@ On supprime alors le paramètres pour lesquelles on a pas observé des $r(h)$ qu
 On voit dans le diagramme PACF des bâtons sortir à h= 1, 2, 4, 10, 11 (et 12, celle ci a était pris en charge par Q=1) et après il n'y a plus de bâtons significatifs.
 Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
 
-$$(1-\phi_1B-\phi_2B^2-\phi_4B^4-\phi_{10}B^{10}-\phi_{11}B^{11})(1-\phi_{12}B^{12}) (1-B)(1-B^{12}) \log(X_t) = (1-\theta_{12}B^{12})\epsilon_t$$
+$$(1-\phi_1B-\phi_2B^2-\phi_4B^4-\phi_{10}B^{10}-\phi_{11}B^{11}) (1-B)(1-B^{12}) \log(X_t) = (1-\theta_{12}B^{12})\epsilon_t$$
 
-autrement dit $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$.
+autrement dit $\text{SARIMA}_{12}[(p= 11,d= 1,q= 0),(P= 0,D= 1,Q= 1)]$.
 
 ```{r model2, echo = TRUE}
 model2 <- arima(log(miles), order = c(11,1,0), fixed=c(NA,NA,0,NA,0,0,0,0,0,NA,NA,NA),
@@ -503,20 +509,21 @@ Avant on à ignorer les bâtons de $\hat\rho(1)$ et $\hat\rho(2)$ (mis en relief
 Ce n'est pas évident si $\hat\rho(2)$ est significatif.
 ** insérer ici {r residues} pour calculer si h=2 sort **
   ```{r}
-  par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
-  acf1 = acf(residuals(modele4), ci.type="ma", lag.max= 30)
-  pacf(residuals(modele4), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+  #par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
+  #acf1 = acf(residuals(modele4), ci.type="ma", lag.max= 30)
+  #pacf(residuals(modele4), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
   ```
   Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
   
-  ```{r residues echo=FALSE}
-  par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
-  acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
-  pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+  ```{r residues, echo=FALSE}
+  #par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
+  #acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
+  #pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
   
-  rho1 = round(acf1[1/12]$acf[1], 2)
-  rho2 = round(acf1[2/12]$acf[1], 2) # rho1 ^2 (??)
-  rho3 = round(acf1[3/12]$acf[1], 2) # # rho1^3 (??)
+  #rho1 = round(acf1[1/12]$acf[1], 2)
+  #rho2 = round(acf1[2/12]$acf[1], 2) # rho1 ^2 (??)
+  #rho3 = round(acf1[3/12]$acf[1], 2) # # rho1^3 (??)
+  rho3 = rho1 = rho2= 4 
   ```
   
   Il y a encore quelques bâtons qui sortens, notamment $r(3), r(12)$ et $r(19)$.
@@ -540,59 +547,71 @@ Dans un modèle ARMA p se trouve par le decalage après lequelle il n'y a plus d
 Cela indique un p = 11.
 
 
-SARIMA(11,1,2)(0,1,1)[12] :
+SARIMA(4,1,2)(0,1,1)[12] :
 
-$$(1-\phi_1B-\phi_2B^2-\phi_4B^4-\phi_{10}B^{10}-\phi_{11}B^{11})(1-\phi_{12}B^{12}) (1-B)(1-B^{12}) \log(X_t) =
+$$(1-\phi_1B-\phi_2B^2-\phi_4B^4-\phi_{10}B^{10}-\phi_{11}B^{11}) (1-B)(1-B^{12}) \log(X_t) =
   (1-\theta_1B-\theta_2B^2)(1-\theta_{12}B^{12})\epsilon_t$$
 
 
-**************************************
-
-
-
 ```{r model 3}
-modele3 <- arima(log(miles), order = c(10,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
+modele3 <- arima(log(miles), 
+                 order = c(4,1,2), fixed= c(NA,NA,0,NA,NA,NA,NA),
+                 seasonal=list(order = c(0,1,1), perdiod=12),
+                 transform.pars = FALSE, method = "CSS")
 # ar10 significativ, en plus pas de coefficients sign. !
 
 summary(modele3)
 coeftest(modele3) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
-pacf(residuals(modele3), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
+#pacf(residuals(modele3), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
 ```
-Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs de coéfficients.
+Il semble qu'il ait trop des estimateurs, aucun est significant.
 
 ### Modèle 4
-$$(1-\phi_1B-\phi_2B^2)(1-B)(1-B^{12}) \log(X_t) = 
-   (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$
-Plus parcimonieux que modèle 3, avec un MA(1):
+
+Il faut enlever quelques parametres. On va essayer de estimer un modèle MA, c'est-à-dire on enlève les quatre paramètres AR.
+
+$$(1-B)(1-B^{12}) \log(X_t) =
+  (1-\theta_1B-\theta_2B^2)(1-\theta_{12}B^{12})\varepsilon_t$$
+  
+Plus parcimonieux que le modèle 3!
 
 ```{r  model 4}
-modele4 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
-sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c(0,0,1), perdiod=12)) #devrait être le même ?
+modele4 <- arima(log(miles), order = c(0,1,2), 
+                 seasonal=list(order = c(0,1,1), perdiod=12))
+
 summary(modele4)
-coeftest(modele4) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+coeftest(modele4)
 ```
+Les paramètres sont significatifs.
+On va ensuite examiner les résidus.
 
-
+```{r echo=FALSE}
+#pacf(residuals(modele4), main="corrélogramme partiel de residuals(modele4)", lag.max= 60)
+```
 
 ```{r model diagnostics}
 # tsdiag(sarima_12.012.011)
 
 # portmanteau tests
 # Box.test(mdiff12diff1)
-acf(residuals(sarima_12.012.011)) # pour montrer b.b. E(e_t*e_s) = 0
-box = Box.test(residuals(sarima_12.012.011), type = "Ljung-Box")$p.value
+
+acf(residuals(modele4)) # pour montrer b.b. E(e_t*e_s) = 0
+box = Box.test(residuals(modele4), type = "Ljung-Box")$p.value
 ```
 
-P-value de Ljung-Box-Test des résidues : $`r box`$.
 
 Après differencier et modèliser il faut tester s'il reste qu'un bruit blanc.
-On peut utiliser un Box-Test.
+On peut utiliser un Box-Test. P-value de Ljung-Box-Test des résidues : $`r box`$.
+
+```{r eval=FALSE, include=FALSE}
+sarima(log(miles), 
+              p= 0, d= 1, q= 2, P= 0, D= 1, Q= 1, S= 12,
+              details = T) # => Plot et Diagnostics
+```
 
 #### densité spectrale
 
-###### Fréquences
-
-Pour le moment je sais pas trop comment expliquer / utiliser.
+On pourrait au lieu des ACF/PACF examiner les fréquences des résidus estimés, ils contiennent la même information.
 
 ```{r periodogramm, echo=FALSE}
 periodogramm <- function(z){
@@ -617,23 +636,21 @@ for (c in (-15):(15)) abline(a=c,b=-1,col="gray")
 }
 
 #periodogramm(mdiff12diff1)
-periodogramm(fit.add$residuals)
-periodogramm(sarima_12.012.011$residuals)
-periodogramm(miles)
+periodogramm(modele4$residuals)
 ```
 
 
-C'est déja mieux, les erreurs semblent plus stable, mais pourtant il existe une autocorrélation.
 
-```{r}
-periodogramm(mdiff1)
-```
-
-Pour les données différenciées il n'y a pas une courbe raide vers le zéro (voir a, fréquence de Fourier $\omega_k = \frac{2\pi k}{n}$)).
+Pour les résidus il n'y a pas une courbe raide vers le zéro (voir (a), fréquence de Fourier $\omega_k = \frac{2\pi k}{n}$)).
 En outre, le log-périodogrammes des résidus tombe moins vite pour les résidus des données différenciées (voir e) qu'implique des résidues stationnaires.
 
-Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c\omega^{-1}$ , dann ist sie nicht integrierbar, was unvereinbar ist mit Stationarität, weil die Varianz eines stationären Prozesses gegeben ist durch das Integral der Spektraldichte. In der Praxis ist $f$ unbekannt und muss durch einen Proxy ersetzt werden, z.B. durch das Periodogramm $I$. Für eine graphische Einschätzung der Stationarität kann man $I(\omega)$ gegen $\omega$ plotten und mit $h(\omega ) = c\omega^{-1}$ vergleichen. Einfacher ist es aber, wenn man $\log(I(\omega))$ gegen $\log(\omega)$ plottet und mit Geraden der Steigung -1 vergleicht (siehe Abbildung 3).
+Comme $f(\omega)$ n'est pas connu, il fallait l'estimer, ce qu'on a fait ici par le spectogramm $I$. Si cette densité spectrale augmente aussi vite que  $h(\omega ) = c\omega^{-1}$, on ne peux pas l'integrer, donc le $\epsilon_t$ ne serait pas stationnaire. 
 
+Pour une vite compairaison en (e) on a ploté $\log(I(\omega))$ contre $\log(\omega)$  et le comparé avec la ligne en grisaille, avec tendance de $-1$.
+
+```{r eval=FALSE, include=FALSE}
+Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c\omega^{-1}$ , dann ist sie nicht integrierbar, was unvereinbar ist mit Stationarität, weil die Varianz eines stationären Prozesses gegeben ist durch das Integral der Spektraldichte. In der Praxis ist $f$ unbekannt und muss durch einen Proxy ersetzt werden, z.B. durch das Periodogramm $I$. Für eine graphische Einschätzung der Stationarität kann man $I(\omega)$ gegen $\omega$ plotten und mit $h(\omega ) = c\omega^{-1}$ vergleichen. Einfacher ist es aber, wenn man $\log(I(\omega))$ gegen $\log(\omega)$ plottet und mit Geraden der Steigung -1 vergleicht (siehe Abbildung 3).
+```
 
 ## 3 - Choix du modèle
 
@@ -642,6 +659,7 @@ Méthode iterativ
 Méthode avec une base de test (training/test ou un critère comme AIC)
 mèthode de coins
 
+enfin on va utiliser AIC du modele complet et MSE pour le modele calcule avec une base de entraînement
 
 ### Base de test
 
@@ -665,36 +683,75 @@ miles.train = head(miles, length(miles)-12)
 On estime les paramètres avec la base de donnée `miles.test` de largeur `r length(miles.test)` (largeur original `r length(miles)`.
 
 ```{r model avec miles.train}
-model <- arima(log(miles.train), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
-miles.prev <- exp(forecast(model, 12)$mean)
-model.mse = sum((miles.test - miles.prev)^2) / 12
-model$aic
+tmodel1 <- arima(log(miles.train), order = c(11,1,0), seasonal=list(order = c(0,1,1), perdiod=12))
+tmodel2 <- arima(log(miles.train), order = c(11,1,0), fixed=c(NA,NA,0,NA,0,0,0,0,0,NA,NA,NA),
+                seasonal=list(order = c(0,1,1), perdiod=12),
+                transform.pars = FALSE, method = "CSS")
+tmodel21 <- arima(log(miles.train), order = c(4,1,0), fixed= c(NA,NA,0,NA,NA),
+                 seasonal=list(order = c(0,1,1), perdiod=12),
+                 transform.pars = FALSE, method = "CSS")
+tmodele3 <- arima(log(miles.train), 
+                 order = c(4,1,2), fixed= c(NA,NA,0,NA,NA,NA,NA),
+                 seasonal=list(order = c(0,1,1), perdiod=12),
+                 transform.pars = FALSE, method = "CSS")
+tmodele4 <- arima(log(miles.train), order = c(0,1,2), 
+                 seasonal=list(order = c(0,1,1), perdiod=12))
 
-plot(miles.prev, col="blue",
-     main = paste("AIC: ", model$aic),
+miles.prev1 <- exp(forecast(tmodel1, 12)$mean)
+miles.prev2 <- exp(forecast(tmodel2, 12)$mean)
+miles.prev21 <- exp(forecast(model21, 12)$mean)
+miles.prev3 <- exp(forecast(tmodele3, 12)$mean)
+miles.prev4 <- exp(forecast(tmodele4, 12)$mean)
+
+model.mse1 = sum((miles.test - miles.prev1)^2) / 12
+model.mse2 = sum((miles.test - miles.prev2)^2) / 12
+model.mse21 = sum((miles.test - miles.prev21)^2) / 12
+model.mse3 = sum((miles.test - miles.prev3)^2) / 12
+model.mse4 = sum((miles.test - miles.prev4)^2) / 12
+
+par(mfcol=c(2,3)) # ,mar=c(2,2,0.5,2),pch=20)
+
+plot(miles.prev1, col="blue",
+     main = paste("model1 AIC: ", a),
      ylab = "miles")
 lines(miles.test)
+
+grid()
+
+plot(miles.prev2, col="blue",
+     main = paste("model2 AIC: ", b),
+     ylab = "miles")
+lines(miles.test)
+
+grid()
+
+plot(miles.prev21, col="blue",
+     main = paste("model21 AIC: ", c),
+     ylab = "miles")
+lines(miles.test)
+
+grid()
+
+plot(miles.prev3, col="blue",
+     main = paste("modele3 AIC: ", d),
+     ylab = "miles")
+lines(miles.test)
+
+grid()
+
+plot(miles.prev4, col="blue",
+     main = paste("modele4 AIC: ", e),
+     ylab = "miles")
+lines(miles.test)
+
 grid()
 
 ```
+MSE, c'est la diffèrence entre les courbes en carré.
 
-```{r}
-
-# Arima # {forecast} <-> comparer avec astsa?
-# https://developpaper.com/arma-arima-box-jenkins-sarima-and-arimax-models-in-r-language-are-used-to-predict-time-series-data/
-
-# library: {astsa}
-
-test = sarima(log(miles), 
-              p= 0, d= 1, q= 0, P= 0, D= 0, Q= 0, S= 12,
-              details = T) # => Plot et Diagnostics
-
-# Values: fit, AIC, BIC, ttable
-
-#sarima.for #=> pour la prévision
-```
 ```{r}
 # library {stats}
+#sarima.for #=> pour la prévision
 test2 = arima(log(miles), order = c(0,1,0), seasonal = list(order= c(0,0,0), period=12))
 predict(test2, 12)
 ```
@@ -706,22 +763,21 @@ Ci-dessous tous les modèles qu'on a trouvé sont comparés dans un tableau.
 Le plus petits le MSE, le meilleur.
 De la même manière avec les AICs, qui indiquent aussi si un modèle est parcimonieux. Ce critère repose donc sur un compromis entre la qualité de l'ajustement et la complexité du modèle, en pénalisant les modèles ayant un grand nombre de paramètres.
 
-```{r placeholder, include=FALSE}
-sarima_12.001.011_AIC = 308
-mse = 443203
+```{r}
+aaic = model1$aic
+baic = model2$aic
+daic = model21$aic
+daic = modele3$aic
+eaic = modele4$aic
 ```
-
 | Model                                     | AIC                           | MSE         |
 |-------------------------------------------|-------------------------------|-------------|
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
-| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r aaic`$   | $`r model.mse1`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r baic`$   | $`r model.mse2`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r caic`$   | $`r model.mse21`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r daic`$   | $`r model.mse3`$   |
+| $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r daic`$   | $`r model.mse4`$   |
 
-model1
-model21
-model 3 ?
-model 4
 
 ### Comparaison avec autres méthodes
 
@@ -817,6 +873,8 @@ ggplot(minArma2, aes(x = p, y = q)) +
 ```
 
 Pour un SARIMA((p,1,q),(P,1,Q))[12] on peut pas puiser les nombre d'estimateurs pour D et Q de ce graphique. Mais il semble comme s'il y a un saisonnalité pour Q.
+
+Nous avons trouvé un modèle sans AR, alors cette méthode ne s'applique pas.
 
 #### auto.arima
 
