@@ -474,9 +474,21 @@ On a un modèle significatif.
 Idéalement il faut examiner les résidus, mais pour être bref on ne vais pas le faire. 
 On va le faire pour un seul modèle à la fin, bien sachant qu'il faudrait le faire chaque fois pour déterminer s'il faut encore ajouter des paramètres.
 
-On ne va pas suivre les modèles AR pur.
 
 ### Modèle 3
+
+En regardant les corrélations de résidues du model21 on remarque qu'il y a des corrélations partials des $\varepsilon$. 
+On ne va pas suivre les modèles AR pur.
+
+Pour le modèle 2.1 on a eu un graphique pour les autocorrélations suivants.
+Il y a aucune indice qu'il s'agit d'un modèle multiplicatif.
+
+```{r, echo =F}
+par(mar=c(3,4,4,1))
+#acf(residuals(model21), lag.max = 30, ci.type = "ma")
+pacf(residuals(model21), lag.max = 30 , main="corrélogramme partiel de residuals(model21)")
+symbols(c(8/12, 19/12),c(-.21, -.23),circles=c(0.1,.1),inches=F, add=T, fg= "red")
+```
 
 On regarde encore une fois les graphiques de ACF et PACF:
 
@@ -487,18 +499,56 @@ symbols(c(1.5/12),c(-.24),circles=c(0.2),inches=F, add=T, fg= "red")
 pacf(mdiff12diff1, lag.max = 30)
 ```
 Est-ce qu'il y aussi une partie moyenne mobile?
+Avant on à ignorer les bâtons de $\hat\rho(1)$ et $\hat\rho(2)$ (mis en relief par le circle rouge).
+Ce n'est pas évident si $\hat\rho(2)$ est significatif.
 ** insérer ici {r residues} pour calculer si h=2 sort **
+  ```{r}
+  par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
+  acf1 = acf(residuals(modele4), ci.type="ma", lag.max= 30)
+  pacf(residuals(modele4), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+  ```
+  Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
+  
+  ```{r residues echo=FALSE}
+  par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
+  acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
+  pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+  
+  rho1 = round(acf1[1/12]$acf[1], 2)
+  rho2 = round(acf1[2/12]$acf[1], 2) # rho1 ^2 (??)
+  rho3 = round(acf1[3/12]$acf[1], 2) # # rho1^3 (??)
+  ```
+  
+  Il y a encore quelques bâtons qui sortens, notamment $r(3), r(12)$ et $r(19)$.
+  Dans le graphique "ACF", est-ce que $\rho(3)$ sort de l'intervalle de confiance ? 
+  Cela peut indiquer qu'il a encore une componente MA dans les erreurs. Pour répondre à cette question, on va faire le calcul.
+  
+  Intervalle de Bartlett q=3 : 
+        $$\pm \frac{1.96}{\sqrt{N}} (1 + 2\hat{\rho}^2(1) + 2\hat{\rho}^2(2) + 2\hat{\rho}^2(3))^{0.5} = 
+          \pm \frac{1.96}{\sqrt{96}}(1 + 2*`r rho1^2`     +  2*`r rho2^2`    + 2*`r rho3^2`)^{0.5} = 
+          \pm `r round(1.96/sqrt(96)*(1+ 2*rho1^2         + 2*rho2^2         + 2*rho3^2)^0.5, 3)` 
+          > 
+          \rho(3) = `r rho3`$$ 
+          **faut il remplacer N par N-1-12 parce qu'on a différencié ?**
+  
+  Alors on va ensuite, comme modèle 3, considerer un modèle avec une partie autoreggresive.
 
--> MA 1,2 et 12 SARIMA(x,1,2)(x,1,MA(12)) $\phi_{12}*B^{12}$
+** fin **
 
-Pour le modèle 1 on a eu un graphique pour les autocorrélations suivants.
-Il y a aucune indice qu'il s'agit d'un modèle multiplicatif.
+Donc on peut supposer qu'on ait un MA avec q = 2.
+Dans un modèle ARMA p se trouve par le decalage après lequelle il n'y a plus de $\hat{r}$ significatif : $h=max(q+1, p+1)$.
+Cela indique un p = 11.
 
-```{r}
-pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
-```
 
-$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
+SARIMA(11,1,2)(0,1,1)[12] :
+
+$$(1-\phi_1B-\phi_2B^2-\phi_4B^4-\phi_{10}B^{10}-\phi_{11}B^{11})(1-\phi_{12}B^{12}) (1-B)(1-B^{12}) \log(X_t) =
+  (1-\theta_1B-\theta_2B^2)(1-\theta_{12}B^{12})\epsilon_t$$
+
+
+**************************************
+
+
 
 ```{r model 3}
 modele3 <- arima(log(miles), order = c(10,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
@@ -511,7 +561,8 @@ pacf(residuals(modele3), main="corrélogramme partiel de residuals(model3)", lag
 Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs de coéfficients.
 
 ### Modèle 4
-
+$$(1-\phi_1B-\phi_2B^2)(1-B)(1-B^{12}) \log(X_t) = 
+   (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$
 Plus parcimonieux que modèle 3, avec un MA(1):
 
 ```{r  model 4}
@@ -521,35 +572,6 @@ summary(modele4)
 coeftest(modele4) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
 ```
 
-```{r}
-par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
-acf1 = acf(residuals(modele4), ci.type="ma", lag.max= 30)
-pacf(residuals(modele4), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
-```
-Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
-
-```{r residues echo=FALSE}
-par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
-acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
-pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
-
-rho1 = round(acf1[1/12]$acf[1], 2)
-rho2 = round(acf1[2/12]$acf[1], 2) # rho1 ^2 (??)
-rho3 = round(acf1[3/12]$acf[1], 2) # # rho1^3 (??)
-```
-
-Il y a encore quelques bâtons qui sortens, notamment $r(3), r(12)$ et $r(19)$.
-Dans le graphique "ACF", est-ce que $\rho(3)$ sort de l'intervalle de confiance ? Cela peut indiquer qu'il a encore une componente MA dans les erreurs. Pour répondre à cette question, on va faire le calcul.
-
-Intervalle de Bartlett q=3 : 
-      $$\pm \frac{1.96}{\sqrt{N}} (1 + 2\hat{\rho}^2(1) + 2\hat{\rho}^2(2) + 2\hat{\rho}^2(3))^{0.5} = 
-        \pm \frac{1.96}{\sqrt{96}}(1 + 2*`r rho1^2`     +  2*`r rho2^2`    + 2*`r rho3^2`)^{0.5} = 
-        \pm `r round(1.96/sqrt(96)*(1+ 2*rho1^2         + 2*rho2^2         + 2*rho3^2)^0.5, 3)` 
-        > 
-        \rho(3) = `r rho3`$$ 
-        **faut il remplacer N par N-1-12 parce qu'on a différencié ?**
-
-Alors on va ensuite, comme modèle 3, considerer un modèle avec une partie autoreggresive.
 
 
 ```{r model diagnostics}
