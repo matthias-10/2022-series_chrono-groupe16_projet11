@@ -3,11 +3,11 @@ title: "Séries chronologiques Projet 2022"
 author: "Matthias Lang, Valentin De Crespin De Billy"
 date: "Janvier 30, 2022"
 output:
+  pdf_document: default
   html_document:
     toc: true
     theme: united
     # number_sections: TRUE
-  pdf_document: default
   df_print: paged
 subtitle: Groupe 16, Sujet 11
 ---
@@ -387,8 +387,7 @@ adf.test(fit.add$residuals, k=3)
 adf.test(fit.add$residuals, k=4)
 ```
 
-## 2 - Modèliser
-
+## 2 - Modéliser
 
 Dans le suivant on va essayer de traîner le bon modèle, bien sachant qu'il y plusieurs modèles qui peuvent apparaître.
 Après qu'on a transformé les données on a également déjà différencié.
@@ -405,30 +404,131 @@ Pour le moment on ne va pas les interpréter, mais on va seulement chercher un m
 On n'incluit pas les modèles qui ne satisfont pas ces critères.
 
 Pour tous modèles on va utiliser la base de données transformées et differenciées, c'est à dire les paramètres $d=1$ et $D=12$ avec saisonnalité 12 vont rester inchangé.
+La base de cette étude seront donc les graphiques suivants, qui montrent les $\rho(h)$ (ACF) et $r(h)$ (PACF). 
+```{r echo=FALSE}
+par(mfrow=c(1,2), mar=c(3,4,1,1))
+acf(mdiff12diff1, lag.max = 48, ci.type = "ma")
+pacf(mdiff12diff1, lag.max = 48)
+```
 
 ### Modèle 1
 
-```{r echo=FALSE}
-par(mfrow=c(1,2), mar=c(3,4,1,1))
-acf(mdiff12diff1, lag.max = 60, ci.type = "ma")
-pacf(mdiff12diff1, lag.max = 60)
-```
-La chute des valeurs vers 0 de $\hat\rho$ indique un modèle MA(q). On suppose que le bâton qui sort avec un decalage de 12 est dû au hasard.
-On voit dans le diagramme PACF 
-Après la dernière différenciation on a vu que les données pourraient être modélisées par un MA(2) avec saisonalité.
+##### a) inférence sur les paramètres
+
+Premierement on va regarder les paramètres saisonales. Il suffit de regarder les bâtons de decalage 12, 24, 36 (et après. Ils correspondent à lag 1.0, 2.0 et 3.0 dans le graphique).
+Sur le coup, c'est $\hat\rho(12)$ qui est significatif. De l'autre côté on a $\hat r(12)$. Mais là on observe également des bâtons à lag 2.0, 3.0 et 4.0, bien qu'ils ne sont pas significatives.
+La chute du PACF et le bâton à $\hat\rho(12)$ indiquent fortement P=0 et Q=1.
+
+Enfin pour les paramètres p et q on va regarder les autres bâtons.
+Est-ce qu'on a un modèle AR ? 
+Il y a une chute des $\hat\rho(h)$ vers 0, $\hat\rho(1)$ et $\hat\rho(2)$ sortent à peine. On pourrait supposer que c'est dû au hasard.
+On voit dans le diagramme PACF des bâtons sortir à h= 1, 2, 4, 10, 11 (et 12, celle ci a était pris en charge par Q=1) et après il n'y a plus de bâtons significatifs.
 Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
 
-$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_2B^2)(1-\theta_{12}B^{12})\epsilon_t$$
-Autrement dit, une $\text{SARIMA}_{12}[(p= 0,d= 1,q= 2),(P= 0,D= 1,Q= 1)]$
+$$(1-\phi_1B-\phi_2B^2-\phi_3B^3-\phi_4B^4-\phi_5B^5-\phi_6B^6-\phi_7B^7-\phi_8B^8-\phi_9B^9-\phi_{10}B^{10}-\phi_{11}B^{11})(1-\phi_{12}B^{12}) (1-B)(1-B^{12}) \log(X_t) = (1-\theta_{12}B^{12})\epsilon_t$$
+Autrement dit, une $\text{SARIMA}_{12}[(p= 11,d= 1,q= 0),(P= 0,D= 1,Q= 1)]$. On va tenter cette possible modèle.
+
+##### b) diagnoses
+
+Après l'identification on peut l'estimer, et il faut faire des test si le modèle est significativ avec tous ces paramètres.
+Enfin il faut examiner les residues.
 
 ```{r fitting a model}
-sarima_12.012.011 <- arima(log(miles), order = c(0,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
-sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c(0,0,1), perdiod=12)) #devrait être le même ?
-summary(sarima_12.012.011)
-coeftest(sarima_12.012.011) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+model1 <- arima(log(miles), order = c(11,1,0), seasonal=list(order = c(0,1,1), perdiod=12))
+#   =   arima(mdiff12diff1, order = c(11,0,0), seasonal=list(order = c(0,0,1), perdiod=12)) #le même modèle
+summary(model1)
+coeftest(model1) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
 ```
 
+On voit que beaucoup de $\phi_i$ ne sont pas significatives. Avant qu'on examine les residues, le plus pratique reste de supprimer quelques paramètres.
+
+
+### Modèle 2
+
+On supprime alors le paramètres pour lesquelles on a pas observé des $r(h)$ qui sortent de leur intervalle de confiance.
+On voit dans le diagramme PACF des bâtons sortir à h= 1, 2, 4, 10, 11 (et 12, celle ci a était pris en charge par Q=1) et après il n'y a plus de bâtons significatifs.
+Alors on aurait le modèle suivante, avec $\epsilon_t$ supposé b.b.: 
+
+$$(1-\phi_1B-\phi_2B^2-\phi_4B^4-\phi_{10}B^{10}-\phi_{11}B^{11})(1-\phi_{12}B^{12}) (1-B)(1-B^{12}) \log(X_t) = (1-\theta_{12}B^{12})\epsilon_t$$
+
+autrement dit $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$.
+
+```{r model2, echo = TRUE}
+model2 <- arima(log(miles), order = c(11,1,0), fixed=c(NA,NA,0,NA,0,0,0,0,0,NA,NA,NA),
+                seasonal=list(order = c(0,1,1), perdiod=12),
+                transform.pars = FALSE, method = "CSS")
+#   =   arima(mdiff12diff1, order = c(11,0,0), seasonal=list(order = c(0,0,1), perdiod=12)) #le même modèle
+summary(model2)
+coeftest(model2)
+```
+Ce modèle pasimonieux n'est pas du meilleur que modèle 1. $\hat\phi_{10}$ et $\hat\phi_{11}$ ne sont toujours pas significatifs.
+
+On modélise sans les coefficients qui ne sont pas significatifs:
+```{r model21}
+model21 <- arima(log(miles), order = c(4,1,0), fixed= c(NA,NA,0,NA,NA),
+                 seasonal=list(order = c(0,1,1), perdiod=12),
+                 transform.pars = FALSE, method = "CSS")
+coeftest(model21)
+```
+On a un modèle significatif.
+Idéalement il faut examiner les résidus, mais pour être bref on ne vais pas le faire. 
+On va le faire pour un seul modèle à la fin, bien sachant qu'il faudrait le faire chaque fois pour déterminer s'il faut encore ajouter des paramètres.
+
+On ne va pas suivre les modèles AR pur.
+
+### Modèle 3
+
+On regarde encore une fois les graphiques de ACF et PACF:
+
 ```{r echo=FALSE}
+par(mfrow=c(1,2), mar=c(3,4,1,1))
+acf(mdiff12diff1, lag.max = 30, ci.type = "ma")
+symbols(c(1.5/12),c(-.24),circles=c(0.2),inches=F, add=T, fg= "red")
+pacf(mdiff12diff1, lag.max = 30)
+```
+Est-ce qu'il y aussi une partie moyenne mobile?
+** insérer ici {r residues} pour calculer si h=2 sort **
+
+-> MA 1,2 et 12 SARIMA(x,1,2)(x,1,MA(12)) $\phi_{12}*B^{12}$
+
+Pour le modèle 1 on a eu un graphique pour les autocorrélations suivants.
+Il y a aucune indice qu'il s'agit d'un modèle multiplicatif.
+
+```{r}
+pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+```
+
+$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
+
+```{r model 3}
+modele3 <- arima(log(miles), order = c(10,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
+# ar10 significativ, en plus pas de coefficients sign. !
+
+summary(modele3)
+coeftest(modele3) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+pacf(residuals(modele3), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
+```
+Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs de coéfficients.
+
+### Modèle 4
+
+Plus parcimonieux que modèle 3, avec un MA(1):
+
+```{r  model 4}
+modele4 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
+sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c(0,0,1), perdiod=12)) #devrait être le même ?
+summary(modele4)
+coeftest(modele4) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
+```
+
+```{r}
+par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
+acf1 = acf(residuals(modele4), ci.type="ma", lag.max= 30)
+pacf(residuals(modele4), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
+```
+Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
+
+```{r residues echo=FALSE}
 par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
 acf1 = acf(residuals(sarima_12.012.011), ci.type="ma", lag.max= 30)
 pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
@@ -513,62 +613,13 @@ En outre, le log-périodogrammes des résidus tombe moins vite pour les résidus
 Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c\omega^{-1}$ , dann ist sie nicht integrierbar, was unvereinbar ist mit Stationarität, weil die Varianz eines stationären Prozesses gegeben ist durch das Integral der Spektraldichte. In der Praxis ist $f$ unbekannt und muss durch einen Proxy ersetzt werden, z.B. durch das Periodogramm $I$. Für eine graphische Einschätzung der Stationarität kann man $I(\omega)$ gegen $\omega$ plotten und mit $h(\omega ) = c\omega^{-1}$ vergleichen. Einfacher ist es aber, wenn man $\log(I(\omega))$ gegen $\log(\omega)$ plottet und mit Geraden der Steigung -1 vergleicht (siehe Abbildung 3).
 
 
-
-### Modèle 2
-
-Ici on peut également essayer de faire un modèle additif 
-$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
-autrement dit $\text{SARIMA}_{12}[(p= 0,d= 1,q= 12),(P= 0,D= 1,Q= 0)]$.
-
-
-```{r echo=FALSE}
-par(mfrow=c(1,2), mar=c(3,4,1,1))
-acf(mdiff12diff1, lag.max = 30, ci.type = "ma")
-pacf(mdiff12diff1, lag.max = 30)
-```
--> MA 1,2 et 12 SARIMA(x,1,2)(x,1,MA(12)) $\phi_{12}*B^{12}$
-
-
-### Modèle 3
-
-Pour le modèle 1 on a eu un graphique pour les autocorrélations suivants.
-
-```{r}
-pacf(residuals(sarima_12.012.011), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
-```
-
-$$(1-B)(1-B^{12}) \log(X_t) = (1-\theta_1B-\theta_{12}B^{12})\epsilon_t$$,  
-
-```{r model 3}
-modele3 <- arima(log(miles), order = c(10,1,2), seasonal=list(order = c(0,1,1), perdiod=12))
-# ar10 significativ, en plus pas de coefficients sign. !
-
-summary(modele3)
-coeftest(modele3) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
-pacf(residuals(modele3), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
-```
-Ils ne sortens plus des bâtons, mais il faut calculer beaucoup de estimateurs de coéfficients.
-
-### Modèle 4
-
-Plus parcimonieux que modèle 1, avec un MA(1):
-
-```{r  model 4}
-modele4 <- arima(log(miles), order = c(0,1,1), seasonal=list(order = c(0,1,1), perdiod=12))
-sarima_comparai <- arima(mdiff12diff1, order = c(0,0,2), seasonal=list(order = c(0,0,1), perdiod=12)) #devrait être le même ?
-summary(modele4)
-coeftest(modele4) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
-```
-
-```{r}
-par(mfrow= c(1,2), mar=c(2,4,1,0.5),pch=20)
-acf1 = acf(residuals(modele4), ci.type="ma", lag.max= 30)
-pacf(residuals(modele4), main="corrélogramme partiel de residuals(model1)", lag.max= 30)
-```
-Dans le PACF ils sortent moins de bâtons que pour le modèle 1.
-
-
 ## 3 - Choix du modèle
+
+Modèle 1: pas significatif
+Méthode iterativ
+Méthode avec une base de test (training/test ou un critère comme AIC)
+mèthode de coins
+
 
 ### Base de test
 
@@ -644,6 +695,11 @@ mse = 443203
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
 | $\text{SARIMA}_{12}[(0, 0, 1),(0, 1, 1)]$ | $`r sarima_12.001.011_AIC`$   | $`r mse`$   |
+
+model1
+model21
+model 3 ?
+model 4
 
 ### Comparaison avec autres méthodes
 
