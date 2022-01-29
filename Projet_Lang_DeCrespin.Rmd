@@ -20,16 +20,16 @@ On a obtenu comme base de données les distances volées par une compagnie aéri
 On vise à trouver un modèle pour décrire cette série temporaire et prévoir l'année 1971.
 
 Pour y arriver, on les a premièrement transformées avec un $\log$, différenciées et de-saisonnalisées.
-Puis, on a cherché des bons modèles avec plusieurs mèthodes: 
+Puis, on a cherché des bons modèles avec plusieures méthodes: 
 
-* un méthode itératif en interpretant les graphiques des ACF et PACF et puis en examiner si les résidus sont un bruit blanc, 
+* une méthode itératif en interpretant les graphiques des ACF et PACF et puis en examinant si les résidus sont un bruit blanc et les coéfficients sont significatifs
 * en entraînant quelques modèles avec les années 1963 - 1969 on a comparé les prévisions pour l'année 1970 avec les valeurs vraies
-* le méthode de coins
+* la méthode de coins
 * en utilisant la fonction ` auto.arima`
 * en comparant leurs AICs
 
 On a trouvé plusieurs modèles validés.
-À l'aide de l'AIC on a finalement choisi un $\text{SARIMA}_{12}((0,1,2)(0,1,1))$, avec lequelle on fait la prévision pour l'année 1971.
+À l'aide de l'AIC et la méthode de coins on a finalement choisi un $\text{SARIMA}_{12}((1,1,2)(0,1,1))$, avec lequelle on a fait la prévision pour l'année 1971.
 On l'a également interprété.
 
 ***
@@ -83,7 +83,7 @@ plot(donnees, type="l", main = "U.K. airlines: aircraft miles flown, by months (
 ```
 L'examen du graphique montre une tendance croissante, il paraît peut-être même une croissance exponentielle.
 Le dernier cas a lieu si la variance croit avec la tendance.
-C'est vraisemblable qu'il a aussi une saisonnalité annuelle, c'est à dire de période 12 car les données sont mensuelles.
+C'est vraisemblable qu'il y a aussi une saisonnalité annuelle, c'est à dire de période 12 car les données sont mensuelles.
 
 #### Transformation
 
@@ -122,14 +122,15 @@ BoxCox_diag(d, main = "après transformation de \n Box et Cox")
 #BoxCox_diag(d, main = TeX("$(1-B)(1-B^{12})X_t$"))
 d = log(miles)
 BoxCox_diag(d, main = TeX("$\\log X_t$"))
-```
-Les points de la série orignale, en haut à la gauche, se trouvent un peu loin sous la diagonale, et ils sont d'un coup aussi déjà proche de l'axe.
-Le meilleur sera soit une transformation de Box et Cox, soit qu'on affirme qu'ils sont déjà stationnaire.
-On trouve pour le transformation de Box et Cox un $lambda=$$`r round( forecast::BoxCox.lambda(miles), 3)`$, afin de faire une transformation en forme de $\frac{X_t^{\lambda} -1}{\lambda}$.
-Pour comparaison, les données originales et les transformation sont plotées ci-dessous, standarisées.
-On voit que la transformation de Box et Cox baisse la variance pour l'année 1971, et augmente la variance pour la première année. Mais il n'y a pas une grande différence par rapport à $\\log(X_t)$.
-Afin de reducer cette propriété nous prenons le logarithme népérien (variances: $`r round(var(head(log(miles),length(miles)/2)), 3)`$ et $`r round(var(tail(log(miles),length(miles)/2)), 3)`$).
 
+d = sqrt(miles)
+BoxCox_diag(d, main = TeX("$\\sqrt{ X_t}$"))
+```
+Les points de la série originale, en haut à la gauche, se trouvent un peu loin sous la diagonale, et ils sont d'un coup aussi déjà proche de l'axe.
+Le meilleur sera soit une transformation de Box et Cox, soit qu'on affirme qu'ils sont déjà stationnaire.
+On trouve pour le transformation de Box et Cox un $\lambda=$$`r round( forecast::BoxCox.lambda(miles), 3)`$, afin de faire une transformation en forme de $\frac{X_t^{\lambda} -1}{\lambda}$.
+
+Pour comparaison, les données originales et les transformations sont plotées ci-dessous, standardisées.
 ```{r echo=FALSE}
 plot((BoxCox(miles, lambda = "auto")-mean(BoxCox(miles, lambda = "auto")))/sd(BoxCox(miles, lambda = "auto")), col = "blue", 
      type= "p",
@@ -151,12 +152,13 @@ legend("topleft",
        #title = "Années",
        border = "white")
 ```
-
+On voit que la transformation de Box et Cox baisse la variance pour l'année 1971, et augmente la variance pour la première année. Mais il n'y a pas une grande différence par rapport à $\\log(X_t)$.
+Afin de reducer cette propriété nous prenons le logarithme népérien (variances: première moitié $`r round(var(head(log(miles),length(miles)/2)), 3)`$ et 2nd $`r round(var(tail(log(miles),length(miles)/2)), 3)`$).
 
 Mais comme vu, le logharithme népérien fait aussi en sorte que les variances soient égales, même si Box et Cox serait mieux.
 On va l'utiliser pour sa simplicité dans la suite, puisque on peut facilement re-transformer les prévisions avec $e^{X_t}$.
 
-On voit que les données $\log(X_t)$ déja stationnaires:
+On voit bizarrement que les données $\log(X_t)$ sont déja stationnaires:
 ```{r, echo = TRUE}
 adf.test(log(donnees$miles), alternative = "stationary", k=0) #k=0 <=> standard dick-fuller test
 ```
@@ -174,8 +176,8 @@ plot(donnees$date, log(miles), type= "l",
 dw = dwtest(log(miles) ~ date, 
             data = donnees)$p.value
 ```
-On a fait un Durbin-Watson Testafin de savoir si l'autocorrélation des erreurs estimées d'un modèle linéare `log(miles) ~ date` est égal à 0, qui est rejetée carrément avec une valeur p de $`r round(dw, 5)`$. 
-Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exemple l'égalité des variances et l'indépandence des valeurs et des erreurs.
+On a fait un Durbin-Watson Test afin de savoir si l'autocorrélation des erreurs estimées d'un modèle linéare `log(miles) ~ date` est égal à 0, qui est rejetée carrément avec une valeur p de $`r round(dw, 5)`$. 
+Il y aura sûrement des autres assumptions blessées pour faire un GLM, par exemple l'égalité des variances et l'indépendence des valeurs et des erreurs.
 On va alors essayer de les modèliser et faire une prévision avec un modèle AR, MA, SAM, SAR, ARIMA ou SARIMA.
 
 ### La tendance
@@ -184,7 +186,7 @@ En gros, on a deux possibilités pour supprimer la tendance et faire en sorte qu
 
 ##### traiter la tendance de manière additive
 
-Soit un modèl additif, dans lequel on modéliser plusieurs componants lesquelles, en somme, sont la série d'origine :
+Peut-être c'est un modèl additif, dans lequel on modéliser plusieurs componants lesquelles, en somme, égalent la série d'origine :
 
 ```{r echo=FALSE}
 m = decompose(log(miles), type = "additive")
@@ -290,9 +292,9 @@ acf(fit.add$residuals, lag.max = 90)
 ```
 L'autocorrélation ne decroit pas.
 
-##### traiter de la tendance en différenciant
+##### traiter la tendance en différenciant
 
-##### Soit en différencier une fois:
+On différencie une fois:
 $$(1-B)\log(X_t)=log(X_t) - log(X_{t-1})$$
 ```{r echo=FALSE}
 plot(decompose(miles, type = "multiplicative")) 
@@ -334,9 +336,9 @@ Il ne reste pas une tendence. Ci-dessous on voit que il n'y a ni une tendance ni
 summary(fit.mult)$coefficients
 ```
 Les coefficients d'une régression sur les données différencies est affichée.
-Le seul paramètre significatif est le coefficient de l'ordonnée à l'origine, qui est presque nul.
+Il n'y a aucun coéfficient significatif, le coéfficient de l'ordonnée à l'origine est presque nul.
 
-Laquelle mèthode choisir ? Généralment différencier est mieux.
+Laquelle méthode choisir ? Généralment différencier est mieux.
 
 ```{r include=FALSE}
 par(mar = c(3,4,4,2))
@@ -384,6 +386,12 @@ points(tail(donnees$date, length(mdiff12diff1)),
 abline(h=0, col = "grey")
 ```
 
+Est-ce qu'il vaut différencier encore une fois ? On va comparer la variance de la série une fois différenciée et de-saisonnalisé, 
+$\widehat{Var}((1-B)(1-B^{12}\log X_t = `r round(var(mdiff12diff1), 3)`$ avec la série deux fois de-saisonnalisé, 
+$\widehat{Var}( (1-B)(1-B^{12})^2\log X_t ) = `r round(var(diff(mdiff12diff1, lag = 12)), 3)`)$.
+
+Comme encore plus différencier ne fait pas baisser la variance, et comme on verra que la série est déjà stationnaire, on ne différencie plus.
+
 Pour tester si la série est stationnaire nous utilisons le Dickey-Fuller t-statistic test. 
 
 ```{r}
@@ -392,12 +400,7 @@ adf.test(mdiff12diff1)
 ```
 On suppose donc que la série est stationnaire de 2nd ordre:
 
-$\forall t \in \mathbb{Z}:~\mathbb{E}(X_t^2) < \infty,~ \mathbb{E}(X_t) = m$ et $\forall t \in \mathbb{Z}; \forall h \in \mathbb{Z}:~ cov(X_t, X_{t+h}) = \gamma(h)$**
-
-Est-ce qu'il vaut différencier encore une fois ? On va comparer la variance de la série une fois différenciée et de-saisonnalisé, 
-$\widehat{Var}((1-B)(1-B^{12}\log X_t = `r round(var(mdiff12diff1), 3)`$ avec la série deux fois de-saisonnalisé, 
-$\widehat{Var}( (1-B)(1-B^{12})^2\log X_t ) = `r round(var(diff(mdiff12diff1, lag = 12)), 3)`)$.
-Comme encore plus différencier ne fait pas baisser la variance, et comme on verra que la série est déjà stationnaire, on ne différencie plus.
+$\forall t \in \mathbb{Z}:~\mathbb{E}(X_t^2) < \infty,~ \mathbb{E}(X_t) = m$ et $\forall t \in \mathbb{Z}; \forall h \in \mathbb{Z}:~ cov(X_t, X_{t+h}) = \gamma(h)$
 
 ```{r delta 2.0, eval=FALSE, include=FALSE}
 # Ca sert à quoi ?
@@ -417,11 +420,12 @@ adf.test(fit.add$residuals, k=4)
 
 ## 2 - Modéliser
 
-Dans le suivant on va essayer de traîner le bon modèle, bien sachant qu'il y plusieurs modèles qui peuvent apparaître.
-Après qu'on a transformé les données on a également déjà différencié.
+Dans le suivant on va essayer de entraîner le bon modèle, bien sachant qu'il y plusieurs modèles qui peuvent apparaître significatifs.
+Après qu'on a transformé les données on a également déjà différencié, et donc en differenciant on a aussi déja trouver que $d=1$ et $D=1$.
+
 On va toujours utiliser une modele de la forme ARIMA((p,d,q),(P,D,Q))[12].
 12, parce qu'on a des données mensuelles. 
-Et en differenciant on a aussi déja trouver que $d=1$ et $D=1$.
+
 Il reste alors a trouver les bon nombre de p et P pour un modèle AR, q et Q pour un modèle MA, ou même les deux (on considère que les AR et MA sont un cas particulier d'un ARIMA avec respectivement $q=0$ et $p=0$).
 
 Pour le moment on ne va pas les interpréter, mais on va seulement chercher un modèle qui a:
@@ -463,7 +467,7 @@ $$
  = (1-\theta_{12}B^{12})\epsilon_t
 \end{aligned}
 $$
-Autrement dit, une $\text{SARIMA}_{12}[(p= 11,d= 1,q= 0),(P= 0,D= 1,Q= 1)]$. On va tenter cette possible modèle.
+Autrement dit, une $\text{SARIMA}_{12}[(p= 11,d= 1,q= 0),(P= 0,D= 1,Q= 1)]$. On va tenter ce modèle.
 
 ##### b) diagnoses
 
@@ -502,6 +506,8 @@ coeftest(model2)
 ```
 Ce modèle n'est pas  meilleur que modèle 1. 
 $\hat\phi_{10}$ et $\hat\phi_{11}$ ne sont toujours pas significatifs.
+
+#### Modèle 21
 
 On modélise sans les coefficients qui ne sont pas significatifs, qui vas nous donner un autre modèle:
 ```{r model21}
@@ -598,7 +604,7 @@ summary(modele3)
 coeftest(modele3) #https://stackoverflow.com/questions/43826952/how-can-i-get-the-t-statistics-for-the-results-of-an-ar1-model-in-r
 #pacf(residuals(modele3), main="corrélogramme partiel de residuals(model3)", lag.max= 60)
 ```
-Il semble qu'il ait trop des estimateurs, aucun est significant.
+Il semble qu'il ait trop d'estimateurs, aucun est significant.
 
 ### Modèle 4
 
@@ -626,11 +632,6 @@ On va ensuite examiner les résidus.
 
 ```{r model diagnostics}
 # tsdiag(sarima_12.012.011)
-
-# portmanteau tests
-# Box.test(mdiff12diff1)
-
-acf(residuals(modele4)) # pour montrer b.b. E(e_t*e_s) = 0
 box = Box.test(residuals(modele4), type = "Ljung-Box")$p.value
 ```
 
@@ -690,13 +691,13 @@ Steigt die Spektraldichte $f(\omega)$ mindestens so steil an wie $h(\omega ) = c
 ## 3 - Choix du modèle
 
 Le chapitre 2 était plutôt exploratif.
-Ce mèthode itérative peux bien servir à trouver le bon modèle.
+Cette méthode itérative peux bien servir à trouver le bon modèle.
 On regarde les corrélations, on ajoute des paramètres, on teste les résidues et les paramètres.
 
 Comme ça on a fini avec un bon modèle.
 On peux trouver et tester les modèles des autres manières aussi, qui seront présentées ensuite.
 
-### La mèthode de coins
+### La méthode de coins
 
 On veut avoir un ARMA (ARIMA/SARIMA) minimal.
 On ne connait pas les vrais $\Delta$, mais on peut les estimer. 
@@ -774,6 +775,8 @@ ggplot(minArma2, aes(x = p, y = q)) +
 Cela nous donnerait un ARIMA(1,2). 
 Pour un SARIMA((p,1,q),(P,1,Q))[12] on peut pas puiser les nombre d'estimateurs pour D et Q de ce graphique. Mais il semble comme s'il y a un saisonnalité pour Q.
 
+#### Modèle 5
+
 ```{r}
 modele5 = arima(log(miles), order = c(1,1,2), 
                   seasonal=list(order = c(0,1,1), perdiod=12))
@@ -783,6 +786,9 @@ modele5
 Cela indique un modèle SARIMA((1,1,2)(0,1,1))[12].
 C'est surprenant, parce qu'il y a aucune indice pour la partie AR dans les corrélations des résidus du modèle 4, qui est purement un SMA différencié.
 
+Le Ljung-Box-Test rejete avec une p-valeur `r Box.test(residuals(modele5), type = "Ljung-Box")$p.value` l'hypothese que les résidus ne soient pas un bruit blanc.
+#### Modèle 6
+
 Parce que l'estimateur pour $\theta_1$ n'est pas significatif, on construit un modèle avec seulement $\theta_2$.
 
 ```{r modele6, echo=TRUE}
@@ -791,15 +797,16 @@ modele6 = arima(log(miles), order = c(1,1,2), fixed=c(NA,NA,0,NA),
 coeftest(modele6)
 ```
 
-
+Le Ljung-Box-Test donne le p-valeur `r Box.test(residuals(modele6), type = "Ljung-Box")$p.value`.
 On verra quand même que ce modèle-là n'est pas meilleur que celle-ci avec les deux paramètres.
 
 ### Base de test
 
 Pour comparer quelques modèles trouvés, on sépare la dernière année, 1970. 
 Puis on calcule les estimateurs pour les modèles avec tous les années antérieures et fait des prévisions pour l'année 1970.
-La meilleure prévision détermine la modèle quelle on va choisir finalement.
-Pour comparer la qualité des prévision on peut utiliser le MSE (mean squared error), le plus faible le meilleur :
+La meilleure prévision détermine la modèle laquelle on va choisir finalement.
+
+Pour comparer la qualité des prévisions on peut utiliser le MSE (mean squared error), le plus faible le meilleur :
 
 $\text{MSE} = \frac{1}{12}\sum_{t=Jan 1970}^{Dec 1970}(\hat{X_t} - X_t)^2$.
 
@@ -815,7 +822,7 @@ miles.train = head(miles, length(miles)-12)
 
 
 On estime les paramètres avec la base de donnée `miles.train` de largeur `r length(miles.train)` (largeur original `r length(miles)`).
-En pleu les données de la base de données, et l'autre courbe est la prévision sur `miles.test`.
+En bleu les données la prévision sur `miles.test`, et la courbe noir sont les vraies valeurs :
 
 ```{r model avec miles.train, message=FALSE, warning=FALSE}
 aaic = model1$aic
@@ -922,7 +929,7 @@ lines(miles.test)
 grid()
 
 ```
-MSE, c'est la diffèrence entre les courbes en carré.
+MSE, c'est la diffèrence en carré entre les deux courbes.
 
 |variable | Model                                     | MSE         |
 |---------|-------------------------------------------|-------------|
@@ -934,7 +941,7 @@ MSE, c'est la diffèrence entre les courbes en carré.
 |modele5| $\text{SARIMA}_{12}[(1, 1, 2),(0, 1, 1)]$  | $`r model.mse5`$   |
 |modele6| $\text{SARIMA}_{12}[(1, 1, 2),(0, 1, 1)]$ parcimonieux | $`r model.mse6`$   |
 
-Ici, le model2 gagne !
+Ici, le model2 gagne ! (Pour model21 on 
 
 ### AIC
 
@@ -968,20 +975,47 @@ Cette fonction est basé sur l'AIC, donc elle n'a pas réussi à trouver notre m
 auto.arima(log(miles), d=1, D=1)
 ```
 
-## 4 Intérpretation du modèle choisi
+## 4 - Intérpretation du modèle choisi
 
 On a donc choisi le modèle 5 suivant, un $\text{SARIMA}_{12}[(1, 1, 2),(0, 1, 1)]$.
+
+$$(1-\phi_1)(1-B)(1-B^{12}) \log(X_t) =
+  (1-\theta_1B-\theta_2B^2)(1-\theta_{12}B^{12})\varepsilon_t$$
 
 ```{r interpretation modele5}
 summary(modele5)
 coeftest(modele5)
 ```
-$\theta_1$ n'est pas significatif. On a aussi estimé le modele6 sans ce paramètre, qui s'averé cependant comme pire que ce modèle-là.
-$\theta_2$ est significatif de hauteur de $-0.09$, $\theta_12$ est significatif de hauteur de $-0.54$.
-Cette partie moyenne mobile indique que les erreurs aléatoires ont un influence pour $X_t$ même avec un decalage de 2 et 12. Le decalage de 12 est facilement expliqué, comme les saisons sont une facteur qui se trouve dans les erreurs. L'influence du paramètre $\theta_2$ n'est pas aussi grande, est veut dire que, s'il y a un choc qui n'est pas endogène, il va augmenter la série après deux mois encore dans la même direction d'environ 10%.
+$\theta_1$ n'est pas significatif. On a aussi estimé le modele6 sans ce paramètre, qui s'a averé cependant comme pire que ce modèle-là en ce qui concerne AIC et MSE.
+
+$\theta_2$ est significatif de hauteur de $-0.63$, $\theta_{12}$ est significatif de hauteur de $-0.54$.
+Cette partie moyenne mobile indique que les erreurs aléatoires ont un influence pour $X_t$ même avec un decalage de 2 et 12. Le decalage de 12 est facilement expliqué, comme les saisons sont une facteur qui se trouve dans les erreurs. 
+L'influence du paramètre $\theta_2$ n'est pas aussi grande, est veut dire que, s'il y a un choc qui n'est pas endogène, il va augmenter la série après deux mois encore dans la même direction d'environ 63%.
 
 $\phi_1$ est significatif de hauteur de $-0.49$.
-C'est-à-dire que si la série a augmenté, après un mois elle va garder la moitie de cette augmentation en moyenne.
+C'est-à-dire que si la série a augmenté, après un mois elle va garder presque la moitié de cette augmentation en moyenne, après deux un quart et ainsi de suite.
+
+### Les résidus
+
+En regardant les résidus on observe qu'il semblent bien stationnaires.
+Apparemment ils sont indépendants, il y a que $\hat r(19)$ qui est significatif (le circle rouge). Je dis que c'est dû au hasard.
+On trouve que $E(\varepsilon_t\varepsilon_s)=0$, également on a déjà fait un teste portmanteau, on peux dire que c'est un bruit blanc.
+
+Alors je constate qu'il ne faut pas ajouter encore des paramètres.
+
+```{r}
+# portmanteau tests
+par(mfrow=c(1,3), mar=c(3,4,1,1))
+
+#symbols(c(1.5/12),c(-.24),circles=c(0.2),inches=F, add=T, fg= "red")
+
+plot(residuals(modele5))
+acf(residuals(modele5), lag.max = 25, ci.type = "ma")
+mtext("Les résidus de modèle 5",3,las=1)
+pacf(residuals(modele5, lag.max = 25))
+symbols(c(19/12),c(-.22),circles=c(0.1),inches=F, add=T, fg= "red")
+```
+
 
 ## 5 - Prévision pour l'année 1971
 
@@ -1004,7 +1038,7 @@ plot(fvalues, col.main = "red")
 # predict(test2, 12)
 
 ```
-On re-transforme la prévision de  $log(X_t)$ avec la fonction exponentielle de base $e0.$.
+On re-transforme la prévision de  $log(X_t)$ avec la fonction exponentielle de base $e$.
 ```{r}
 print(exp(fvalues$mean))
 ```
